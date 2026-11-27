@@ -58,3 +58,22 @@ CI (`.github/workflows/build-ipa.yml`) builds an unsigned IPA on a macOS runner 
 It also runs the app in the iOS Simulator in demo modes (`-demo home|team|summon|battle|special|ultimate|result`) to capture screenshots, then publishes everything as a GitHub Release.
 
 Requirements: iOS 15+, portrait.
+
+## Importing 3D models (GLB / USDZ)
+
+Supported formats: `.glb` / `.gltf` (via GLTFKit2) and `.usdz` / `.usda` / `.usdc` / `.scn` (SceneKit).
+The model must be a rigged humanoid. Mixamo, AccuRIG, VRM/Unity and Blender `.L/.R` bone names are mapped
+automatically onto the game skeleton, so every move works on the imported model.
+
+- **On device:** Team screen → pick a fighter → **Import 3D Model** → choose a file in Files.
+  It is stored in `Documents/Models/<id>.<ext>` and the screen shows how many bones were mapped (x/10).
+- **Bundled:** put `<id>.glb` (e.g. `kai.glb`) in `MoonAction/Models/`. Optional `<id>.json`:
+  `{"yaw": 180, "height": 2.15}`.
+
+## Versioning
+
+- `MARKETING_VERSION` in `project.yml` is the single source of the version (e.g. `3.1.0`).
+- CI sets the build number (`CFBundleVersion`) to the workflow run number.
+- After building, CI reads both values back from the IPA's `Info.plist`, fails on any mismatch, and only then
+  names the file `MoonAction-<version>-build<build>-unsigned.ipa` and the release tag `v<version>-build<build>`.
+- The home screen footer shows the installed `v<version> (<build>)`.

@@ -99,7 +99,7 @@ final class HomeScreen: Screen {
         menu.translatesAutoresizingMaskIntoConstraints = false
         ui.addSubview(menu)
 
-        let footer = Glass.label(L("home.footer"), size: 9, weight: .regular, color: Theme.text3)
+        let footer = Glass.label(L("home.footer") + "  ·  " + AppInfo.display, size: 9, weight: .regular, color: Theme.text3)
         ui.addSubview(footer)
 
         NSLayoutConstraint.activate([

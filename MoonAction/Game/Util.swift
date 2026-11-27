@@ -113,3 +113,10 @@ func realDelay(_ seconds: Double, _ fn: @escaping @MainActor () -> Void) {
         fn()
     }
 }
+
+/// Version as baked into Info.plist at build time (CI sets it from project.yml + run number).
+enum AppInfo {
+    static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?" }
+    static var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?" }
+    static var display: String { "v\(version) (\(build))" }
+}

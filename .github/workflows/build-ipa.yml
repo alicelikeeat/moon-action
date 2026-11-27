@@ -26,6 +26,16 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Version (single source of truth)
+        run: |
+          # Marketing version lives in project.yml; build number = CI run number.
+          APP_VERSION=$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([0-9]+(\.[0-9]+){1,2})"?.*/\1/p' project.yml | head -1)
+          test -n "$APP_VERSION" || { echo "MARKETING_VERSION not found"; exit 1; }
+          APP_BUILD=${{ github.run_number }}
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "APP_BUILD=$APP_BUILD" >> "$GITHUB_ENV"
+          echo "Building Moon Action $APP_VERSION ($APP_BUILD)"
+
       - name: Resolve packages
         run: xcodebuild -resolvePackageDependencies -project MoonAction.xcodeproj -scheme MoonAction -clonedSourcePackagesDirPath spm
 
@@ -34,6 +44,7 @@ jobs:
           set -o pipefail
           xcodebuild -project MoonAction.xcodeproj -scheme MoonAction -configuration Release \
             -destination 'generic/platform=iOS' -derivedDataPath build -clonedSourcePackagesDirPath spm \
+            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$APP_BUILD" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee build.log | grep -E "error:|\*\* BUILD" || true
           test -d build/Build/Products/Release-iphoneos/MoonAction.app || { grep -n "error:" build.log | head -80; exit 1; }
@@ -43,23 +54,35 @@ jobs:
           rm -rf Payload && mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/MoonAction.app Payload/
           ls Payload/MoonAction.app/Frameworks || true
-          zip -qry MoonAction-unsigned.ipa Payload
-          ls -lh MoonAction-unsigned.ipa
+          # Read the version back from the built app and refuse to publish on mismatch.
+          PLIST=Payload/MoonAction.app/Info.plist
+          V=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$PLIST")
+          B=$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$PLIST")
+          echo "Info.plist: CFBundleShortVersionString=$V CFBundleVersion=$B"
+          if [ "$V" != "$APP_VERSION" ] || [ "$B" != "$APP_BUILD" ]; then
+            echo "::error::Version mismatch: built $V ($B), expected $APP_VERSION ($APP_BUILD)"; exit 1
+          fi
+          IPA_NAME="MoonAction-$V-build$B-unsigned.ipa"
+          zip -qry "$IPA_NAME" Payload
+          echo "IPA_NAME=$IPA_NAME" >> "$GITHUB_ENV"
+          ls -lh "$IPA_NAME"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MoonAction-unsigned-ipa
-          path: MoonAction-unsigned.ipa
+          name: ${{ env.IPA_NAME }}
+          path: ${{ env.IPA_NAME }}
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.0.${{ github.run_number }}
-          name: Moon Action v3.0.${{ github.run_number }} (unsigned IPA)
+          tag_name: v${{ env.APP_VERSION }}-build${{ env.APP_BUILD }}
+          name: Moon Action ${{ env.APP_VERSION }} (build ${{ env.APP_BUILD }}) · unsigned IPA
           target_commitish: ${{ github.sha }}
-          files: MoonAction-unsigned.ipa
+          files: ${{ env.IPA_NAME }}
           body: |
+            **Version ${{ env.APP_VERSION }} · build ${{ env.APP_BUILD }}** (CFBundleShortVersionString / CFBundleVersion, verified from the built Info.plist) · commit ${{ github.sha }}
+
             Unsigned iOS build of **Moon Action** — an original portrait 3D card battle game.
 
             * Portrait, over-the-shoulder 3D camera, procedurally generated cel-shaded fighters
@@ -74,6 +97,7 @@ jobs:
           set -o pipefail
           xcodebuild -project MoonAction.xcodeproj -scheme MoonAction -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild -clonedSourcePackagesDirPath spm \
+            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$APP_BUILD" \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -3
 
       - name: Boot simulator
@@ -136,5 +160,5 @@ jobs:
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.0.${{ github.run_number }}
+          tag_name: v${{ env.APP_VERSION }}-build${{ env.APP_BUILD }}
           files: shots/*.png
