@@ -1,0 +1,66 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned, device)
+        run: |
+          set -o pipefail
+          xcodebuild -version
+          xcodebuild \
+            -project MoonAction.xcodeproj \
+            -target MoonAction \
+            -configuration Release \
+            -sdk iphoneos \
+            SYMROOT="$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: .*(Swift|swift)|\*\* BUILD" || true
+          test -d build/Release-iphoneos/MoonAction.app || { grep -n "error:" build.log | head -50; exit 1; }
+
+      - name: Package IPA
+        run: |
+          rm -rf Payload
+          mkdir Payload
+          cp -R build/Release-iphoneos/MoonAction.app Payload/
+          zip -qry MoonAction-unsigned.ipa Payload
+          ls -lh MoonAction-unsigned.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoonAction-unsigned-ipa
+          path: MoonAction-unsigned.ipa
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Moon Action v1.0.${{ github.run_number }} (unsigned IPA)
+          target_commitish: ${{ github.sha }}
+          files: MoonAction-unsigned.ipa
+          body: |
+            Unsigned iOS build of **Moon Action** — an original 3v3 card-based arena fighter.
+
+            This IPA is **not signed**. Sideload it with a tool that re-signs the app
+            (e.g. AltStore, Sideloadly, or TrollStore on supported devices).
+
+            Requires iOS 15.0 or later. Landscape only.
