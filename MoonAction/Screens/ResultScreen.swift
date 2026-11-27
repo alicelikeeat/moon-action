@@ -56,7 +56,7 @@ final class ResultScreen: Screen {
         t += dt
         let a = Float(sin(t * 0.25) * 0.3)
         arena.camera.simdPosition = SIMD3(sin(a) * 6.2, 1.9, cos(a) * 6.2)
-        arena.camera.simdLook(at: SIMD3(0, 0.95, 0))
+        arena.camera.simdLook(at: SIMD3(0, 0.95, 0), up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
     }
 
     private func buildUI() {

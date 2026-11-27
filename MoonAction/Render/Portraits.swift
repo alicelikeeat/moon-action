@@ -38,11 +38,11 @@ enum Portraits {
         case .bust:
             cam.camera?.fieldOfView = 26
             cam.simdPosition = SIMD3(0.32, 2.05 * h, 1.35)
-            cam.simdLook(at: SIMD3(0, 1.97 * h, 0))
+            cam.simdLook(at: SIMD3(0, 1.97 * h, 0), up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
         case .body:
             cam.camera?.fieldOfView = 34
             cam.simdPosition = SIMD3(1.3, 1.5 * h, 4.2)
-            cam.simdLook(at: SIMD3(0, 1.22 * h, 0))
+            cam.simdLook(at: SIMD3(0, 1.22 * h, 0), up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
         }
         scene.rootNode.addChildNode(cam)
         let key1 = SCNNode()

@@ -283,7 +283,13 @@ final class BattleScreen: Screen {
             shake *= max(0, 1 - dt * 9)
         }
         cam.simdPosition = p
-        cam.simdLook(at: camLook)
+        // Never look (almost) straight down/up: keep some horizontal offset.
+        var flat = SIMD2<Float>(camLook.x - p.x, camLook.z - p.z)
+        if simd_length(flat) < 0.6 {
+            flat = simd_length(flat) > 1e-4 ? simd_normalize(flat) * 0.6 : SIMD2(0, 0.6)
+            camLook = SIMD3(p.x + flat.x, camLook.y, p.z + flat.y)
+        }
+        cam.simdLook(at: camLook, up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
         fovKick *= max(0, 1 - dt * 8)
         cam.camera?.fieldOfView = CGFloat(54 + fovKick)
     }

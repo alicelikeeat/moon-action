@@ -671,10 +671,12 @@ final class FighterModel {
 
     func setPowered(_ on: Bool) {
         if on, powerGlow == nil {
-            let g = Toon.glowSprite(UIColor(hex: 0xFF4A3A), size: 1.3)
-            g.simdPosition = SIMD3(0, 1.0, -0.2)
-            g.opacity = 0.35
-            body.addChildNode(g)
+            // Subtle power-up marker: a thin red ring at the feet.
+            let g = SCNNode(geometry: SCNTorus(ringRadius: 0.55, pipeRadius: 0.015))
+            g.geometry?.materials = [Toon.energy(UIColor(hex: 0xFF6A5A), alpha: 0.8)]
+            g.simdPosition = SIMD3(0, 0.03, 0)
+            g.runAction(.repeatForever(.sequence([.scale(to: 1.15, duration: 0.5), .scale(to: 0.95, duration: 0.5)])))
+            root.addChildNode(g)
             powerGlow = g
         } else if !on, let g = powerGlow {
             g.removeFromParentNode()

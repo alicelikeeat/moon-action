@@ -39,7 +39,7 @@ final class TeamScreen: Screen {
         pedestal.simdPosition = SIMD3(0, 0.09, 0)
         arena.world.addChildNode(pedestal)
         arena.camera.simdPosition = SIMD3(0, 1.75, 7.4)
-        arena.camera.simdLook(at: SIMD3(0, 0.15, 0))
+        arena.camera.simdLook(at: SIMD3(0, 0.15, 0), up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
         buildUI()
         focus(selected.first ?? "kai")
         refresh()

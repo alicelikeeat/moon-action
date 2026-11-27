@@ -18,7 +18,7 @@ final class SummonScreen: Screen {
         scene = arena.scene
         pointOfView = arena.camera
         arena.camera.simdPosition = SIMD3(0, 1.8, 7.5)
-        arena.camera.simdLook(at: SIMD3(0, 1.1, 0))
+        arena.camera.simdLook(at: SIMD3(0, 1.1, 0), up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
 
         let color = Theme.accent
         for (r, w) in [(Float(1.6), Float(0.035)), (Float(1.85), Float(0.012))] {
@@ -29,12 +29,14 @@ final class SummonScreen: Screen {
             portal.addChildNode(ring)
         }
         let disc = SCNNode(geometry: SCNCylinder(radius: 1.55, height: 0.01))
-        disc.geometry?.materials = [Toon.energy(color.darker(0.4), alpha: 0.5)]
+        disc.geometry?.materials = [Toon.energy(color.darker(0.75), alpha: 0.25)]
         disc.simdEulerAngles = SIMD3(.pi / 2, 0, 0)
         portal.addChildNode(disc)
-        portal.addChildNode(Toon.glowSprite(color, size: 5))
+        let halo = Toon.glowSprite(color, size: 2.6)
+        halo.opacity = 0.35
+        portal.addChildNode(halo)
         let ps = Toon.aura(color, height: 0.2)
-        ps.birthRate = 60
+        ps.birthRate = 25
         ps.emitterShape = SCNTorus(ringRadius: 1.6, pipeRadius: 0.1)
         ps.emittingDirection = SCNVector3(0, 0, 1)
         portal.addParticleSystem(ps)

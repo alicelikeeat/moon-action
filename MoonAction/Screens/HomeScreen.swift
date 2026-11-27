@@ -32,7 +32,7 @@ final class HomeScreen: Screen {
         t += dt
         let a = Float(sin(t * 0.18) * 0.45)
         arena.camera.simdPosition = SIMD3(sin(a) * 5.6, 1.7, cos(a) * 5.6)
-        arena.camera.simdLook(at: SIMD3(0, 1.45, 0))
+        arena.camera.simdLook(at: SIMD3(0, 1.45, 0), up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
         if t > nextMove, let lead = models.first {
             nextMove = t + 2.6
             moveIndex += 1
