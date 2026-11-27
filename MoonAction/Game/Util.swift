@@ -70,6 +70,8 @@ final class Timeline {
     private var counter = 0
     private(set) var now: Double = 0
 
+    func cancelAll() { items.removeAll() }
+
     func after(_ delay: Double, tag: AnyObject? = nil, _ fn: @escaping () -> Void) {
         counter += 1
         items.append(Item(time: now + max(0, delay), order: counter, tag: tag.map { ObjectIdentifier($0) }, fn: fn))

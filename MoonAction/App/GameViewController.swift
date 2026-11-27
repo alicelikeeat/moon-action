@@ -98,6 +98,8 @@ enum Demo {
         switch mode {
         case "team": return TeamScreen()
         case "summon": return SummonScreen()
+        case "viewer": return ViewerScreen(focus: "aria")
+        case "cheats": return HomeScreen()
         case "battle", "ultimate", "special":
             let ids = ["aria", "kai", "luna"]
             return BattleScreen(playerIDs: ids, enemyIDs: ["nyx", "blaze", "ivy"], enemyLevel: 3, stage: 3)

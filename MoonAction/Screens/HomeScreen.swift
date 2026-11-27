@@ -9,6 +9,7 @@ final class HomeScreen: Screen {
     private var nextMove: Double = 2
     private var moveIndex = 0
     private var helpModal: UIView?
+    private var cheatModal: UIView?
 
     override func build() {
         arena = Arena(theme: 0)
@@ -26,6 +27,10 @@ final class HomeScreen: Screen {
             models.append(m)
         }
         buildUI()
+    }
+
+    override func didAppear() {
+        if Demo.mode == "cheats" { showCheats() }
     }
 
     override func update(dt: Double) {
@@ -89,13 +94,23 @@ final class HomeScreen: Screen {
         let row = UIStackView(arrangedSubviews: [fighters, summon])
         row.spacing = 10
         row.distribution = .fillEqually
+        let viewer = Glass.button(L("home.viewer"), symbol: "cube.transparent", style: .secondary, fontSize: 15) { [weak self] in
+            self?.go(ViewerScreen())
+        }
+        let cheats = Glass.button(L("home.cheats"), symbol: "wand.and.stars", style: .secondary,
+                                  tint: Cheats.anyOn ? Theme.ultimate.withAlphaComponent(0.55) : nil, fontSize: 15) { [weak self] in
+            self?.showCheats()
+        }
+        let row2 = UIStackView(arrangedSubviews: [viewer, cheats])
+        row2.spacing = 10
+        row2.distribution = .fillEqually
         let help = Glass.button(L("home.help"), symbol: "questionmark.circle", style: .regular, fontSize: 13) { [weak self] in
             self?.showHelp()
         }
-        let menu = UIStackView(arrangedSubviews: [battle, row, help])
+        let menu = UIStackView(arrangedSubviews: [battle, row, row2, help])
         menu.axis = .vertical
         menu.spacing = 10
-        menu.setCustomSpacing(16, after: row)
+        menu.setCustomSpacing(16, after: row2)
         menu.translatesAutoresizingMaskIntoConstraints = false
         ui.addSubview(menu)
 
@@ -129,6 +144,7 @@ final class HomeScreen: Screen {
             menu.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -14),
             battle.heightAnchor.constraint(equalToConstant: 60),
             fighters.heightAnchor.constraint(equalToConstant: 48),
+            viewer.heightAnchor.constraint(equalToConstant: 48),
             help.heightAnchor.constraint(equalToConstant: 38),
 
             footer.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
@@ -165,6 +181,64 @@ final class HomeScreen: Screen {
             ok.heightAnchor.constraint(equalToConstant: 44).isActive = true
             stack.setCustomSpacing(18, after: stack.arrangedSubviews.last!)
             stack.addArrangedSubview(ok)
+        }
+    }
+
+    private func showCheats() {
+        cheatModal = presentModal(width: 350) { stack in
+            stack.addArrangedSubview(Glass.label(L("cheat.title"), size: 19, weight: .semibold))
+            let note = Glass.label(L("cheat.note"), size: 11, weight: .regular, color: Theme.text2)
+            note.numberOfLines = 2
+            stack.addArrangedSubview(note)
+            for key in Cheats.Key.allCases {
+                let icon = UIImageView(image: UIImage(systemName: key.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)))
+                icon.tintColor = Theme.ultimate
+                icon.contentMode = .center
+                icon.widthAnchor.constraint(equalToConstant: 24).isActive = true
+                let t = Glass.label(key.title, size: 14, weight: .semibold, align: .left)
+                let d = Glass.label(key.detail, size: 10, weight: .regular, color: Theme.text2, align: .left)
+                let text = UIStackView(arrangedSubviews: [t, d])
+                text.axis = .vertical
+                text.spacing = 1
+                let sw = UISwitch()
+                sw.isOn = Cheats.isOn(key)
+                sw.onTintColor = Theme.ultimate
+                sw.accessibilityLabel = key.title
+                sw.addAction(UIAction { [weak sw] _ in
+                    Cheats.set(key, sw?.isOn ?? false)
+                    UISelectionFeedbackGenerator().selectionChanged()
+                }, for: .valueChanged)
+                let row = UIStackView(arrangedSubviews: [icon, text, sw])
+                row.spacing = 10
+                row.alignment = .center
+                stack.addArrangedSubview(row)
+            }
+            let actions: [(String, String, () -> Void)] = [
+                ("person.3.fill", "cheat.unlock", { Cheats.unlockAll() }),
+                ("moon.stars.fill", "cheat.coins", { Cheats.addCoins() }),
+                ("arrow.up.circle.fill", "cheat.maxlv", { Cheats.maxLevels() }),
+            ]
+            let grid = UIStackView()
+            grid.axis = .vertical
+            grid.spacing = 8
+            for (sym, key, fn) in actions {
+                var b: UIButton!
+                b = Glass.button(L(key), symbol: sym, style: .secondary, fontSize: 13) {
+                    fn()
+                    Glass.setTitle(b, L(key) + " · " + L("cheat.applied"))
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+                b.heightAnchor.constraint(equalToConstant: 38).isActive = true
+                grid.addArrangedSubview(b)
+            }
+            stack.setCustomSpacing(16, after: stack.arrangedSubviews.last!)
+            stack.addArrangedSubview(grid)
+            let done = Glass.button(L("cheat.done"), style: .primary, fontSize: 15) { [weak self] in
+                self?.go(HomeScreen())
+            }
+            done.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            stack.setCustomSpacing(16, after: grid)
+            stack.addArrangedSubview(done)
         }
     }
 }

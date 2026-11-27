@@ -106,6 +106,9 @@ final class BattleHUD {
 
         let pause = Glass.button(symbol: "pause.fill", style: .secondary, fontSize: 12) { [weak self] in self?.screen?.setPaused(true) }
         root.addSubview(pause)
+        let cheatBadge = Glass.caption(L("cheat.active"), size: 9, color: Theme.ultimate)
+        cheatBadge.isHidden = !Cheats.anyOn
+        root.addSubview(cheatBadge)
         autoBtn = Glass.button(L("battle.auto"), style: .secondary, fontSize: 11) { [weak self] in self?.toggleAuto() }
         autoBtn.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
         root.addSubview(autoBtn)
@@ -285,6 +288,8 @@ final class BattleHUD {
             autoBtn.leadingAnchor.constraint(equalTo: pause.trailingAnchor, constant: 6),
             autoBtn.centerYAnchor.constraint(equalTo: pause.centerYAnchor),
             autoBtn.heightAnchor.constraint(equalToConstant: 30),
+            cheatBadge.leadingAnchor.constraint(equalTo: pause.leadingAnchor),
+            cheatBadge.topAnchor.constraint(equalTo: pause.bottomAnchor, constant: 6),
 
             rangePanel.centerXAnchor.constraint(equalTo: root.centerXAnchor),
             rangePanel.centerYAnchor.constraint(equalTo: pause.centerYAnchor),

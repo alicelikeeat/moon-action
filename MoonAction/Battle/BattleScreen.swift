@@ -152,7 +152,7 @@ final class BattleScreen: Screen {
             tickSide(enemy, dt)
             if !cinematic { updateProjectiles(dt) }
             if !battleOver {
-                aiUpdate(enemy)
+                if !Cheats.freezeAI { aiUpdate(enemy) }
                 if player.auto { aiUpdate(player) }
             }
             checkChargeTouch()
@@ -187,6 +187,10 @@ final class BattleScreen: Screen {
         if !battleOver && !cinematic {
             s.energy = min(Tune.energyMax, s.energy + (charging ? Tune.chargeRate : Tune.energyRegen) * dt)
             s.dodge = min(Tune.dodgeMax, s.dodge + Tune.dodgeRegen * dt)
+            if s.isPlayer {
+                if Cheats.infiniteEnergy { s.energy = Tune.energyMax }
+                if Cheats.infiniteDodge { s.dodge = Tune.dodgeMax }
+            }
         }
         if !c.isKO {
             if charging != c.wasCharging {

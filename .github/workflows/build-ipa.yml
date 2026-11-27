@@ -150,6 +150,8 @@ jobs:
           run special;  sleep 3.3; shot 8-special-a; sleep 0.6; shot 9-special-b; sleep 0.8; shot 10-special-c
           run ultimate; sleep 4.8; shot 11-ult-cutin; sleep 1.4; shot 12-ult-fire; sleep 0.8; shot 13-ult-hit
           run result;   sleep 6;  shot 14-result
+          run viewer;   sleep 6;  shot 15-viewer-a; sleep 4; shot 16-viewer-b
+          run cheats;   sleep 6;  shot 17-cheats
           ls -la shots
 
       - name: Upload screenshots

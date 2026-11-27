@@ -746,7 +746,7 @@ extension BattleScreen {
             evaded(o, by: s)
             return false
         }
-        if aiDodge > 0 && canAIDodge(o) && roll(aiDodge) {
+        if aiDodge > 0 && !(Cheats.freezeAI && !o.isPlayer) && canAIDodge(o) && roll(aiDodge) {
             // The evade must actually execute; otherwise this same hit lands normally.
             if dodge(o, lateral: roll(0.5) ? 1 : -1) {
                 aiEvade(o, by: s)
@@ -761,6 +761,8 @@ extension BattleScreen {
         let crit = roll(0.08)
         if crit { dmg *= 1.5 }
         dmg = dmg.rounded()
+        if s.isPlayer && Cheats.oneHit { dmg = max(dmg, t.hp) }
+        if o.isPlayer && Cheats.god { dmg = 0 }
         t.hp = max(0, t.hp - dmg)
         timeline.cancel(tag: t)
         t.busy = false
