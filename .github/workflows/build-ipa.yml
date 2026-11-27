@@ -47,54 +47,13 @@ jobs:
           name: MoonAction-unsigned-ipa
           path: MoonAction-unsigned.ipa
 
-      - name: Build for simulator
-        run: |
-          set -o pipefail
-          xcodebuild -project MoonAction.xcodeproj -target MoonAction -configuration Debug -sdk iphonesimulator -arch arm64 \
-            SYMROOT="$PWD/simbuild" CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -3
-
-      - name: Simulator screenshots
-        continue-on-error: true
-        run: |
-          mkdir -p shots
-          UDID=$(xcrun simctl list devices available -j | python3 -c '
-          import json,sys
-          d=json.load(sys.stdin)["devices"]
-          c=[(rt,dev) for rt,devs in d.items() if "iOS" in rt for dev in devs if "Pro" in dev["name"] and "Max" not in dev["name"] and "iPhone" in dev["name"]]
-          c.sort(key=lambda x:x[0])
-          print(c[-1][1]["udid"])')
-          echo "Simulator $UDID"
-          xcrun simctl boot "$UDID"
-          xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 || true
-          xcrun simctl install "$UDID" simbuild/Debug-iphonesimulator/MoonAction.app
-          shot() { xcrun simctl io "$UDID" screenshot "shots/$1.png"; }
-          run() { xcrun simctl launch --terminate-running-process "$UDID" com.moonaction.game -demo "$1" > /dev/null; }
-          run home;     sleep 6;  shot 1-home
-          run team;     sleep 5;  shot 2-team
-          run summon;   sleep 5;  shot 3-summon
-          run battle;   sleep 4;  shot 4-battle-start; sleep 3; shot 5-battle-a; sleep 3; shot 6-battle-b; sleep 4; shot 7-battle-c
-          run special;  sleep 3.3; shot 8-special-a; sleep 0.6; shot 9-special-b; sleep 0.8; shot 10-special-c
-          run ultimate; sleep 4.6; shot 11-ult-cutin; sleep 1.4; shot 12-ult-fire; sleep 0.8; shot 13-ult-hit
-          run result;   sleep 5;  shot 14-result
-          ls -la shots
-
-      - name: Upload screenshots
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: shots/
-          if-no-files-found: ignore
-
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v2.0.${{ github.run_number }}
           name: Moon Action v2.0.${{ github.run_number }} (unsigned IPA)
           target_commitish: ${{ github.sha }}
-          files: |
-            MoonAction-unsigned.ipa
-            shots/*.png
+          files: MoonAction-unsigned.ipa
           body: |
             Unsigned iOS build of **Moon Action** — an original portrait 3D card battle game.
 
@@ -104,3 +63,63 @@ jobs:
 
             This IPA is **not signed**. Sideload it with a tool that re-signs the app
             (e.g. AltStore, Sideloadly, or TrollStore on supported devices). Requires iOS 15+.
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project MoonAction.xcodeproj -target MoonAction -configuration Debug -sdk iphonesimulator -arch arm64 \
+            SYMROOT="$PWD/simbuild" CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -3
+
+      - name: Simulator screenshots
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          mkdir -p shots
+          log() { echo "[$(date +%H:%M:%S)] $*"; }
+          # run a command with a watchdog (seconds)
+          wd() { local t=$1; shift; "$@" & local p=$!; ( sleep "$t"; kill -9 $p 2>/dev/null && echo "TIMEOUT: $*" ) & local w=$!; wait $p; local rc=$?; kill $w 2>/dev/null; return $rc; }
+          xcrun simctl list runtimes
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          c=[(rt,dev) for rt,devs in d.items() if "iOS" in rt for dev in devs if "iPhone" in dev["name"] and "Pro" in dev["name"] and "Max" not in dev["name"]]
+          c.sort(key=lambda x:x[0])
+          print(c[-1][1]["udid"], c[-1][1]["name"], c[-1][0], file=sys.stderr)
+          print(c[-1][1]["udid"])')
+          log "boot $UDID"
+          wd 240 xcrun simctl boot "$UDID" || true
+          for i in $(seq 1 60); do
+            st=$(xcrun simctl list devices | grep "$UDID" || true)
+            echo "$st" | grep -q Booted && break
+            sleep 3
+          done
+          log "booted: $st"
+          sleep 20
+          log "install"
+          wd 120 xcrun simctl install "$UDID" simbuild/Debug-iphonesimulator/MoonAction.app
+          shot() { log "shot $1"; wd 30 xcrun simctl io "$UDID" screenshot "shots/$1.png" || true; }
+          run() { log "launch $1"; wd 60 xcrun simctl launch --terminate-running-process "$UDID" com.moonaction.game -demo "$1" || true; }
+          run home;     sleep 8;  shot 1-home
+          run team;     sleep 6;  shot 2-team
+          run summon;   sleep 6;  shot 3-summon
+          run battle;   sleep 5;  shot 4-battle-start; sleep 3; shot 5-battle-a; sleep 3; shot 6-battle-b; sleep 4; shot 7-battle-c
+          run special;  sleep 3.3; shot 8-special-a; sleep 0.6; shot 9-special-b; sleep 0.8; shot 10-special-c
+          run ultimate; sleep 4.8; shot 11-ult-cutin; sleep 1.4; shot 12-ult-fire; sleep 0.8; shot 13-ult-hit
+          run result;   sleep 6;  shot 14-result
+          ls -la shots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/
+          if-no-files-found: ignore
+
+      - name: Attach screenshots to release
+        if: always()
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.${{ github.run_number }}
+          files: shots/*.png
