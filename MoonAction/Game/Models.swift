@@ -457,7 +457,7 @@ enum Roster {
 struct SaveData: Codable {
     var coins: Int = 600
     var stage: Int = 1
-    var unlocked: [String] = ["kai", "luna", "rook"]
+    var unlocked: [String] = ["kai", "luna", "rook", "aria"]
     var xp: [String: Int] = [:]
     var team: [String] = ["kai", "luna", "rook"]
     var wins: Int = 0
@@ -481,6 +481,10 @@ final class Save {
             data = s
         } else {
             data = SaveData()
+        }
+        // Fighters that ship with an imported 3D model are always available.
+        for id in ["aria"] where !data.unlocked.contains(id) {
+            data.unlocked.append(id)
         }
     }
 

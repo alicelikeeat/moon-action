@@ -41,7 +41,7 @@ final class TeamScreen: Screen {
         arena.camera.simdPosition = SIMD3(0, 1.75, 7.4)
         arena.camera.simdLook(at: SIMD3(0, 0.15, 0), up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
         buildUI()
-        focus(selected.first ?? "kai")
+        focus(Demo.mode == "team" ? "aria" : (selected.first ?? "kai"))
         refresh()
     }
 

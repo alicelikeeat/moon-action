@@ -99,9 +99,9 @@ enum Demo {
         case "team": return TeamScreen()
         case "summon": return SummonScreen()
         case "battle", "ultimate", "special":
-            let ids = ["kai", "luna", "rook"]
+            let ids = ["aria", "kai", "luna"]
             return BattleScreen(playerIDs: ids, enemyIDs: ["nyx", "blaze", "ivy"], enemyLevel: 3, stage: 3)
-        case "result": return ResultScreen(won: true, teamIDs: ["kai", "luna", "rook"], stage: 1)
+        case "result": return ResultScreen(won: true, teamIDs: ["aria", "kai", "luna"], stage: 1)
         default: return HomeScreen()
         }
     }
