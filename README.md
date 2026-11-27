@@ -70,6 +70,19 @@ automatically onto the game skeleton, so every move works on the imported model.
 - **Bundled:** put `<id>.glb` (e.g. `kai.glb`) in `MoonAction/Models/`. Optional `<id>.json`:
   `{"yaw": 180, "height": 2.15}`.
 
+### Slimming a large GLB with Blender
+
+`tools/optimize_glb.py` runs Blender headless. It does the following:
+- decimates meshes to a triangle target while keeping skin weights;
+- downscales textures;
+- exports an uncompressed GLB;
+- reports how many game joints the skeleton maps to.
+
+```bash
+blender -b -P tools/optimize_glb.py -- --in big.glb --out kai.glb --target-tris 60000 --max-tex 2048 \
+    --report report.json --preview previews/
+```
+
 ## Versioning
 
 - `MARKETING_VERSION` in `project.yml` sets **MAJOR.MINOR** (currently `3.1`).

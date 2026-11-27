@@ -3,6 +3,9 @@ name: Build unsigned IPA
 on:
   push:
     branches: ['**']
+    paths-ignore:
+      - 'tools/**'
+      - '**/*.md'
   workflow_dispatch:
 
 permissions:
