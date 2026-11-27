@@ -40,6 +40,7 @@ enum Toon {
         let m = SCNMaterial()
         m.diffuse.contents = color.withAlphaComponent(alpha)
         m.emission.contents = color
+        m.emission.intensity = 2
         m.lightingModel = .constant
         m.blendMode = .add
         m.writesToDepthBuffer = false

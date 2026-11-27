@@ -465,9 +465,38 @@ final class BattleHUD {
         UIView.animate(withDuration: 0.25, animations: { v.alpha = 0 }) { _ in v.removeFromSuperview() }
     }
 
+    /// Anime focus lines converging on the action.
+    func speedLines(_ duration: Double) {
+        let b = root.bounds
+        let v = UIView(frame: b)
+        v.isUserInteractionEnabled = false
+        let shape = CAShapeLayer()
+        let path = UIBezierPath()
+        let c = CGPoint(x: b.midX, y: b.midY * 0.85)
+        let R = hypot(b.width, b.height)
+        for _ in 0..<64 {
+            let a = CGFloat.random(in: 0..<(2 * .pi))
+            let w = CGFloat.random(in: 0.004...0.016)
+            let inner = R * CGFloat.random(in: 0.3...0.42)
+            path.move(to: CGPoint(x: c.x + cos(a - w) * R, y: c.y + sin(a - w) * R))
+            path.addLine(to: CGPoint(x: c.x + cos(a) * inner, y: c.y + sin(a) * inner))
+            path.addLine(to: CGPoint(x: c.x + cos(a + w) * R, y: c.y + sin(a + w) * R))
+            path.close()
+        }
+        shape.path = path.cgPath
+        shape.fillColor = UIColor(white: 1, alpha: 0.45).cgColor
+        v.layer.addSublayer(shape)
+        fxLayer.insertSubview(v, at: 0)
+        v.alpha = 0
+        UIView.animate(withDuration: 0.06, animations: { v.alpha = 1 }) { _ in
+            UIView.animate(withDuration: 0.2, delay: max(0, duration - 0.2), options: [], animations: { v.alpha = 0 },
+                           completion: { _ in v.removeFromSuperview() })
+        }
+    }
+
     func screenFlash(_ color: UIColor) {
         let v = UIView(frame: root.bounds)
-        v.backgroundColor = color.lighter(0.6).withAlphaComponent(0.55)
+        v.backgroundColor = color.lighter(0.6).withAlphaComponent(0.25)
         v.isUserInteractionEnabled = false
         fxLayer.addSubview(v)
         UIView.animate(withDuration: 0.4, animations: { v.alpha = 0 }) { _ in v.removeFromSuperview() }

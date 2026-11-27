@@ -4,6 +4,11 @@ import simd
 
 extension BattleScreen {
     func spark(at p: SIMD3<Float>, color: UIColor, big: Bool) {
+        VFX.impact(at: p, color: color, heavy: big, in: fxRoot)
+        if big { hud.speedLines(0.18) }
+    }
+
+    func sparkLegacy(at p: SIMD3<Float>, color: UIColor, big: Bool) {
         SCNNode.emit(Toon.burst(.white, count: big ? 26 : 12, speed: big ? 9 : 6, size: big ? 0.5 : 0.32, life: 0.22), at: p, in: fxRoot, life: 0.6)
         SCNNode.emit(Toon.burst(color, count: big ? 30 : 14, speed: big ? 5 : 3, size: big ? 0.6 : 0.4, life: 0.3, streaks: false),
                      at: p, in: fxRoot, life: 0.6)
@@ -24,6 +29,10 @@ extension BattleScreen {
     }
 
     func burst(at p: SIMD3<Float>, color: UIColor, scale: Float) {
+        VFX.impact(at: p, color: color, heavy: false, in: fxRoot)
+    }
+
+    func burstLegacy(at p: SIMD3<Float>, color: UIColor, scale: Float) {
         let g = Toon.glowSprite(color, size: CGFloat(scale))
         g.simdPosition = p
         fxRoot.addChildNode(g)
@@ -35,7 +44,12 @@ extension BattleScreen {
         Sound.play(.explode)
         Haptics.hit(true)
         shake = 0.4
-        fovKick = 12
+        fovKick = 10
+        VFX.explosion(at: p, color: color, in: fxRoot)
+        hud.speedLines(0.3)
+    }
+
+    func explosionLegacy(at p: SIMD3<Float>, color: UIColor) {
         let ball = SCNNode(geometry: SCNSphere(radius: 1))
         ball.geometry?.materials = [Toon.energy(color.lighter(0.3), alpha: 0.7)]
         ball.simdPosition = p

@@ -178,6 +178,7 @@ extension BattleScreen {
                 let dir = self.dirTo(a, o.current)
                 self.moveTo(a, o.current.pos - dir * Tune.meleeStop, dashT)
                 a.model.dash()
+                VFX.dust(at: a.world3 + SIMD3(0, 0.1, 0), scale: 0.7, in: self.fxRoot)
                 if d > 3 { a.model.afterimage(in: self.fxRoot) }
                 Sound.play(.dodge)
             }))
@@ -257,16 +258,8 @@ extension BattleScreen {
         var dir = simd_normalize(t.chest - start)
         let right = simd_normalize(simd_cross(dir, SIMD3(0, 1, 0)))
         dir = simd_normalize(dir + right * spread)
-        let n = SCNNode()
-        let core = SCNNode(geometry: SCNSphere(radius: CGFloat(radius * 0.55)))
-        core.geometry?.materials = [Toon.energy(.white)]
-        n.addChildNode(core)
-        let shell = SCNNode(geometry: SCNSphere(radius: CGFloat(radius)))
-        shell.geometry?.materials = [Toon.energy(a.def.aura, alpha: 0.6)]
-        n.addChildNode(shell)
-        let g = Toon.glowSprite(a.def.aura, size: CGFloat(radius * 5))
-        n.addChildNode(g)
-        n.addParticleSystem(Toon.trail(a.def.aura, size: CGFloat(radius * 2.2)))
+        let n = VFX.projectile(color: a.def.aura, radius: radius)
+        VFX.muzzle(at: start, color: a.def.aura, size: CGFloat(radius * 5), in: fxRoot)
         n.simdPosition = start
         fxRoot.addChildNode(n)
         let farBonus = RangeZone.of(dist(a, t)) == .far ? 1.1 : 1.0
@@ -360,9 +353,10 @@ extension BattleScreen {
         a.model.apply(FighterModel.beamChargePose, duration: 0.15)
         a.auraBurstUntil = now + startup + 0.3
         let color = a.def.aura
-        let orb = Toon.glowSprite(color, size: 0.4)
+        let orb = VFX.chargeIn(color: color, radius: CGFloat(1.0 + radius))
         a.model.fistR.addChildNode(orb)
-        orb.runAction(.scale(to: CGFloat(radius * 6), duration: startup))
+        orb.childNode(withName: "orb", recursively: false)?.runAction(.scale(to: CGFloat(1 + radius * 4), duration: startup))
+        if s.isPlayer || ultimate { hud.speedLines(startup) }
         var locked = false
         var beamNode: SCNNode?
         var steps: [(Double, () -> Void)] = [(startup, { [weak self] in
@@ -373,26 +367,15 @@ extension BattleScreen {
             let start = a.model.handWorld
             let dir = simd_normalize(t.chest - start)
             let length: Float = 60
-            let holder = SCNNode()
+            let holder = VFX.beam(color: color, radius: radius, length: length)
             holder.simdPosition = start
             holder.simdOrientation = simd_quatf(from: SIMD3(0, 1, 0), to: dir)
-            let outer = SCNNode(geometry: SCNCylinder(radius: CGFloat(radius), height: CGFloat(length)))
-            outer.geometry?.materials = [Toon.energy(color, alpha: 0.55)]
-            outer.simdPosition = SIMD3(0, length / 2, 0)
-            let core = SCNNode(geometry: SCNCylinder(radius: CGFloat(radius * 0.45), height: CGFloat(length)))
-            core.geometry?.materials = [Toon.energy(.white)]
-            core.simdPosition = SIMD3(0, length / 2, 0)
-            let head = Toon.glowSprite(color, size: CGFloat(radius * 8))
-            holder.addChildNode(outer)
-            holder.addChildNode(core)
-            holder.addChildNode(head)
             holder.simdScale = SIMD3(1, 0.01, 1)
             self.fxRoot.addChildNode(holder)
             SCNTransaction.begin()
             SCNTransaction.animationDuration = 0.16
             holder.simdScale = SIMD3(1, 1, 1)
             SCNTransaction.commit()
-            outer.runAction(.repeatForever(.sequence([.scale(to: 1.15, duration: 0.05), .scale(to: 0.92, duration: 0.05)])))
             beamNode = holder
             Sound.play(.beam)
             self.shake = ultimate ? 0.28 : 0.14
@@ -427,6 +410,7 @@ extension BattleScreen {
                 }
                 self.applyHit(from: s, power: power / Double(ticks) * (last ? 1.3 : 1), stun: last ? 0.9 : 0.5,
                               knock: last ? 14 : 0.8, heavy: last, aiDodge: 0, ignoreInvuln: true)
+                VFX.muzzle(at: t.chest, color: a.def.aura, size: CGFloat(radius * 7), in: self.fxRoot)
             }))
         }
         steps.append((0.1, { [weak self] in
@@ -452,15 +436,9 @@ extension BattleScreen {
         let o = opponent(of: s)
         let color = a.def.aura
         let impact = o.current.world3
-        let orb = SCNNode()
-        let core = SCNNode(geometry: SCNSphere(radius: 1.4))
-        core.geometry?.materials = [Toon.energy(color.lighter(0.5))]
-        orb.addChildNode(core)
-        let shell = SCNNode(geometry: SCNSphere(radius: 2.0))
-        shell.geometry?.materials = [Toon.energy(color, alpha: 0.45)]
-        orb.addChildNode(shell)
-        orb.addChildNode(Toon.glowSprite(color, size: 9))
-        orb.addParticleSystem(Toon.trail(color, size: 2.5))
+        let orb = VFX.projectile(color: color, radius: 1.5)
+        orb.addParticleSystem(VFX.chargeSparks(color))
+        orb.particleSystems?.last?.birthRate = 80
         orb.simdPosition = a.world3 + SIMD3(0, 9, 0)
         fxRoot.addChildNode(orb)
         orb.runAction(.sequence([.scale(to: 0.2, duration: 0), .scale(to: 1, duration: 0.5)]))
@@ -525,6 +503,7 @@ extension BattleScreen {
         let (pos, look) = frontShot(a, distance: 2.0, height: 1.7, side: s.isPlayer ? 0.7 : -0.7)
         cut(to: pos, look: look, for: 1.6)
         let duration = hud.ultimateCutIn(a.def, side: s)
+        hud.speedLines(duration)
         SCNNode.emit(Toon.burst(a.def.aura, count: 80, speed: 6, size: 0.3, life: 0.6), at: a.chest, in: fxRoot)
         timeline.after(duration, tag: a) { [weak self] in
             guard let self else { return }
@@ -698,7 +677,10 @@ extension BattleScreen {
         away = simd_length(away) > 0.001 ? simd_normalize(away) : SIMD2(0, 1)
         t.tween = nil
         t.knockVel = away * knock
-        if heavy && knock >= 8 { t.launchedUntil = now + 0.75 }
+        if heavy && knock >= 8 {
+            t.launchedUntil = now + 0.75
+            VFX.dust(at: t.world3 + SIMD3(0, 0.1, 0), scale: 1.0, in: fxRoot)
+        }
         t.model.hurt(heavy: heavy)
         if !basic { s.cardLanded = true }
         if basic { s.energy = min(Tune.energyMax, s.energy + 2) }

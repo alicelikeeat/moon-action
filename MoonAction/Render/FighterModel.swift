@@ -27,6 +27,7 @@ final class FighterModel {
     private var powerGlow: SCNNode?
     private var materials: [SCNMaterial] = []
     private var currentAura = -1
+    private lazy var sparks: SCNParticleSystem = VFX.chargeSparks(def.look.aura)
     private var rng: UInt64
     private var retarget: Retargeter?
     private var importedHolder: SCNNode?
@@ -56,7 +57,7 @@ final class FighterModel {
     init(def: FighterDef) {
         self.def = def
         rng = def.id.unicodeScalars.reduce(UInt64(1469598103934665603)) { ($0 ^ UInt64($1.value)) &* 1099511628211 } | 1
-        aura = Toon.aura(def.look.aura, height: 1.9)
+        aura = VFX.auraSystem(def.look.aura)
         buildSkeleton()
         if let url = ModelLibrary.url(for: def.id), let node = ModelLibrary.load(url) {
             setupImported(node)
@@ -107,6 +108,7 @@ final class FighterModel {
         head.addChildNode(headTop)
         auraNode.simdPosition = SIMD3(0, 0.95, 0)
         auraNode.addParticleSystem(aura)
+        auraNode.addParticleSystem(sparks)
         body.addChildNode(auraNode)
 
         // Ground shadow
@@ -626,7 +628,9 @@ final class FighterModel {
     func setAura(_ level: Int) {
         guard level != currentAura else { return }
         currentAura = level
-        aura.birthRate = [0, 10, 120, 240][max(0, min(3, level))]
+        let l = max(0, min(3, level))
+        aura.birthRate = [0, 14, 150, 280][l]
+        sparks.birthRate = [0, 0, 40, 70][l]
     }
 
     func flash() {
@@ -638,17 +642,7 @@ final class FighterModel {
     }
 
     func afterimage(in parent: SCNNode) {
-        // Teleport afterimage: a fading aura silhouette + speed sparks at the departure point.
-        let base = root.simdWorldPosition
-        for (i, h) in [Float(0.55), Float(1.1), Float(1.75)].enumerated() {
-            let g = Toon.glowSprite(def.look.aura, size: CGFloat(i == 2 ? 0.8 : 1.1))
-            g.simdPosition = base + SIMD3(0, h * def.look.height, 0)
-            g.opacity = 0.7
-            parent.addChildNode(g)
-            g.runAction(.sequence([.group([.fadeOut(duration: 0.28), .scale(to: 0.4, duration: 0.28)]), .removeFromParentNode()]))
-        }
-        let sparks = Toon.burst(def.look.aura, count: 18, speed: 3, size: 0.18, life: 0.25)
-        SCNNode.emit(sparks, at: base + SIMD3(0, 1.1, 0), in: parent, life: 0.5)
+        VFX.vanish(at: root.simdWorldPosition, height: 2.1 * def.look.height, color: def.look.aura, in: parent)
     }
 
     func setVisible(_ v: Bool) {

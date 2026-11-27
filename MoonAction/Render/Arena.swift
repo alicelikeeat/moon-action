@@ -33,7 +33,16 @@ final class Arena {
         cam.fieldOfView = 58
         cam.zNear = 0.1
         cam.zFar = 400
-        cam.wantsHDR = false
+        cam.wantsHDR = true
+        cam.wantsExposureAdaptation = false
+        cam.exposureOffset = 0
+        cam.bloomIntensity = 1.1
+        cam.bloomThreshold = 0.85
+        cam.bloomBlurRadius = 14
+        cam.vignettingIntensity = 0.45
+        cam.vignettingPower = 0.8
+        cam.saturation = 1.08
+        cam.contrast = 0.06
         camera.camera = cam
         camera.simdPosition = SIMD3(0, 2.2, -6)
         scene.rootNode.addChildNode(camera)
