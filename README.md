@@ -3,6 +3,18 @@
 An **original** real-time, card-based 3v3 arena fighter for iOS, built with SpriteKit.
 It belongs to the anime card-fighter genre, but every character, name, move, piece of art and sound effect is original.
 
+## Native Liquid Glass UI
+
+All menus and the battle HUD use native UIKit controls in the iOS 26 **Liquid Glass** design language:
+
+- `UIGlassEffect` panels.
+- `UIButton.Configuration.glass()` and `.prominentGlass()` buttons.
+- SF Symbols and SF Rounded type.
+
+SpriteKit renders only the arena and characters underneath.
+On iOS 15–18 the same controls fall back to native blur materials.
+The Liquid Glass code is compiled when building with the iOS 26 SDK (Xcode 26), which CI selects automatically.
+
 ## Gameplay
 
 - **3 vs 3 team battles**: knock out the whole enemy team before the 150-second timer runs out.

@@ -1,8 +1,9 @@
 import SpriteKit
+import UIKit
 
-final class HomeScene: SKScene {
-    private var coinLabel: ShadowLabel!
-    private var helpLayer: SKNode?
+final class HomeScene: GameScene {
+    private var coinLabel: UILabel?
+    private var helpModal: UIView?
 
     override func didMove(to view: SKView) {
         anchorPoint = .zero
@@ -13,27 +14,26 @@ final class HomeScene: SKScene {
         let H = size.height
         addChild(BackgroundNode(size: size, groundY: 170, theme: 0))
 
-        // Logo
+        // Logo (SpriteKit art)
         let logo = SKNode()
-        logo.position = CGPoint(x: W * 0.32, y: H * 0.68)
+        logo.position = CGPoint(x: W * 0.32, y: H * 0.72)
         addChild(logo)
-        let crescent = SKShapeNode(path: FighterNode.crescentPath(radius: 70))
+        let crescent = SKShapeNode(path: FighterNode.crescentPath(radius: 62))
         crescent.fillColor = UIColor(hex: 0xFFD45A)
         crescent.strokeColor = UIColor(hex: 0xFFF2C2)
         crescent.lineWidth = 4
         crescent.glowWidth = 6
-        crescent.position = CGPoint(x: -200, y: 30)
+        crescent.position = CGPoint(x: -230, y: 30)
         crescent.zRotation = 0.4
         logo.addChild(crescent)
-        let title = ShadowLabel("MOON ACTION", size: 92, color: .white)
-        title.position = CGPoint(x: 20, y: 40)
+        let title = ShadowLabel("MOON ACTION", size: 88)
+        title.position = CGPoint(x: 10, y: 40)
         logo.addChild(title)
-        let sub = ShadowLabel("ARENA CARD FIGHTER", size: 28, color: UIColor(hex: 0x8FE3FF), font: Fonts.bold)
-        sub.position = CGPoint(x: 20, y: -26)
+        let sub = ShadowLabel("ARENA CARD FIGHTER", size: 26, color: UIColor(hex: 0x8FE3FF), font: Fonts.bold)
+        sub.position = CGPoint(x: 10, y: -22)
         logo.addChild(sub)
         logo.run(.repeatForever(.sequence([.moveBy(x: 0, y: 6, duration: 1.2), .moveBy(x: 0, y: -6, duration: 1.2)])))
 
-        // Showcase fighters from the player's team
         let team = save.data.team.filter { save.isUnlocked($0) }
         for (i, id) in team.prefix(2).enumerated() {
             let f = FighterNode(def: Roster.byID(id))
@@ -44,98 +44,107 @@ final class HomeScene: SKScene {
             addChild(f)
             f.burstAura(0.8)
         }
+        installUI(in: view)
+    }
 
-        // Top bar
-        coinLabel = ShadowLabel("", size: 30, color: UIColor(hex: 0xFFD45A), align: .right)
-        coinLabel.position = CGPoint(x: W - Layout.safeRight - 24, y: H - 40)
-        addChild(coinLabel)
-        let rec = ShadowLabel("W \(save.data.wins)  ·  L \(save.data.losses)", size: 22, color: UIColor(white: 1, alpha: 0.75),
-                              font: Fonts.bold, align: .left)
-        rec.position = CGPoint(x: Layout.safeLeft + 24, y: H - 40)
-        addChild(rec)
-        refreshCoins()
+    override func buildUI() {
+        let save = Save.shared
 
-        // Menu
-        let x = W * 0.32
-        let battle = ButtonNode(text: "BATTLE  ·  STAGE \(save.data.stage)", size: CGSize(width: 440, height: 92),
-                                color: UIColor(hex: 0xD9432F), fontSize: 34)
-        battle.position = CGPoint(x: x, y: H * 0.40)
-        battle.action = { [weak self] in
-            guard let self else { return }
-            self.transition(to: TeamSelectScene(size: self.size))
-        }
-        addChild(battle)
-        battle.run(.repeatForever(.sequence([.scale(to: 1.03, duration: 0.6), .scale(to: 1, duration: 0.6)])))
+        let (record, _) = chip(symbol: "trophy.fill", text: "\(save.data.wins) W  ·  \(save.data.losses) L", tint: .maGold)
+        ui.addSubview(record)
+        let (coins, coinText) = chip(symbol: "moon.stars.fill", text: "\(save.data.coins)", tint: .maCoin)
+        coinLabel = coinText
+        ui.addSubview(coins)
 
-        let summon = ButtonNode(text: "SUMMON", size: CGSize(width: 212, height: 74), color: UIColor(hex: 0x7B3FBF), fontSize: 28)
-        summon.position = CGPoint(x: x - 114, y: H * 0.40 - 104)
-        summon.action = { [weak self] in
-            guard let self else { return }
-            self.transition(to: SummonScene(size: self.size))
-        }
-        addChild(summon)
-
-        let help = ButtonNode(text: "HOW TO PLAY", size: CGSize(width: 212, height: 74), color: UIColor(hex: 0x1F7A8C), fontSize: 24)
-        help.position = CGPoint(x: x + 114, y: H * 0.40 - 104)
-        help.action = { [weak self] in self?.showHelp() }
-        addChild(help)
-
-        let sound = ButtonNode(text: save.data.soundOn ? "SOUND ON" : "SOUND OFF", size: CGSize(width: 170, height: 50),
-                               color: UIColor(white: 0.15, alpha: 0.8), fontSize: 18, corner: 12)
-        sound.position = CGPoint(x: W - Layout.safeRight - 110, y: H - 100)
-        sound.action = { [weak sound] in
+        let sound = Glass.button(symbol: save.data.soundOn ? "speaker.wave.2.fill" : "speaker.slash.fill", fontSize: 16)
+        sound.addAction(UIAction { [weak sound] _ in
             Save.shared.data.soundOn.toggle()
             Save.shared.persist()
             Sound.shared.enabled = Save.shared.data.soundOn
-            sound?.label.text = Save.shared.data.soundOn ? "SOUND ON" : "SOUND OFF"
+            sound?.configuration?.image = UIImage(systemName: Save.shared.data.soundOn ? "speaker.wave.2.fill" : "speaker.slash.fill",
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .bold))
+            Sound.play(.ui)
+        }, for: .touchUpInside)
+        ui.addSubview(sound)
+
+        let battle = Glass.button("Battle", subtitle: "Stage \(save.data.stage)", symbol: "flame.fill",
+                                  style: .prominent, tint: .maRed, fontSize: 24) { [weak self] in
+            guard let self else { return }
+            self.transition(to: TeamSelectScene(size: self.size))
         }
-        addChild(sound)
+        let summon = Glass.button("Summon", symbol: "sparkles", style: .regular, fontSize: 18) { [weak self] in
+            guard let self else { return }
+            self.transition(to: SummonScene(size: self.size))
+        }
+        let help = Glass.button("How to Play", symbol: "questionmark.circle.fill", style: .regular, fontSize: 18) { [weak self] in
+            self?.showHelp()
+        }
+        let row = UIStackView(arrangedSubviews: [summon, help])
+        row.spacing = 12
+        row.distribution = .fillEqually
+        let menu = UIStackView(arrangedSubviews: [battle, row])
+        menu.axis = .vertical
+        menu.spacing = 12
+        menu.translatesAutoresizingMaskIntoConstraints = false
+        ui.addSubview(menu)
 
-        let footer = makeLabel("An original game. All characters and art are procedurally drawn originals.", size: 14,
-                               color: UIColor(white: 1, alpha: 0.45), font: Fonts.demi)
-        footer.position = CGPoint(x: W / 2, y: 22 + Layout.safeBottom * 0.3)
-        addChild(footer)
-    }
+        let footer = Glass.label("An original game · all characters and art are procedurally drawn originals",
+                                 size: 11, weight: .medium, color: UIColor(white: 1, alpha: 0.5))
+        ui.addSubview(footer)
 
-    private func refreshCoins() {
-        coinLabel.text = "◉ \(Save.shared.data.coins)"
+        NSLayoutConstraint.activate([
+            record.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
+            record.topAnchor.constraint(equalTo: safe.topAnchor, constant: 12),
+            sound.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -16),
+            sound.centerYAnchor.constraint(equalTo: record.centerYAnchor),
+            sound.widthAnchor.constraint(equalToConstant: 44),
+            sound.heightAnchor.constraint(equalToConstant: 44),
+            coins.trailingAnchor.constraint(equalTo: sound.leadingAnchor, constant: -10),
+            coins.centerYAnchor.constraint(equalTo: record.centerYAnchor),
+
+            NSLayoutConstraint(item: menu, attribute: .centerX, relatedBy: .equal, toItem: ui, attribute: .centerX, multiplier: 0.64, constant: 0),
+            menu.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -48),
+            menu.widthAnchor.constraint(equalToConstant: 330),
+            battle.heightAnchor.constraint(equalToConstant: 64),
+            summon.heightAnchor.constraint(equalToConstant: 48),
+
+            footer.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            footer.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -8),
+            footer.widthAnchor.constraint(lessThanOrEqualTo: safe.widthAnchor, constant: -32),
+        ])
     }
 
     private func showHelp() {
-        helpLayer?.removeFromParent()
-        let layer = SKNode()
-        layer.zPosition = 500
-        let dim = SKShapeNode(rect: CGRect(origin: .zero, size: size))
-        dim.fillColor = UIColor(white: 0, alpha: 0.85)
-        dim.strokeColor = .clear
-        layer.addChild(dim)
-        let title = ShadowLabel("HOW TO PLAY", size: 48, color: UIColor(hex: 0xFFD45A))
-        title.position = CGPoint(x: size.width / 2, y: size.height - 80)
-        layer.addChild(title)
-        let lines = [
-            "Battles are 3 vs 3. Knock out the whole enemy team before time runs out.",
-            "STRIKE cards (red) dash in for melee combos. BLAST cards (blue) fire projectiles.",
-            "Cards cost ENERGY. It refills over time — hold CHARGE to refill it faster.",
-            "Blasts stop a strike that is dashing in. Up close, a strike beats a blast.",
-            "Swipe the arena or tap EVADE to dodge with a brief invincibility (uses 1 evade pip).",
-            "Evading also breaks you out of the enemy's combo — time it well!",
-            "SPECIAL is a powerful signature move with a cooldown.",
-            "Landing and taking hits fills ULTIMATE. At 100% unleash your Ultimate Art.",
-            "Tap a teammate portrait to tag them in. Win battles to earn coins and XP.",
-        ]
-        for (i, line) in lines.enumerated() {
-            let l = makeLabel("•  " + line, size: 22, font: Fonts.demi, align: .left)
-            l.position = CGPoint(x: max(Layout.safeLeft + 40, size.width / 2 - 520), y: size.height - 160 - CGFloat(i) * 52)
-            layer.addChild(l)
+        helpModal = presentModal(width: 560) { stack in
+            let title = Glass.label("How to Play", size: 26, weight: .heavy, color: .maCoin)
+            stack.addArrangedSubview(title)
+            let items: [(String, String)] = [
+                ("person.3.fill", "3 vs 3 — knock out the whole enemy team before time runs out."),
+                ("hand.raised.fill", "Red STRIKE cards dash in for combos. Blue BLAST cards fire projectiles."),
+                ("bolt.fill", "Cards cost Energy. Hold CHARGE to refill faster."),
+                ("arrow.triangle.2.circlepath", "A blast stops a strike dashing in; up close, strikes win."),
+                ("wind", "Swipe the arena or tap EVADE to dodge — it also breaks enemy combos."),
+                ("sparkles", "SPECIAL is your signature move. ULTIMATE unlocks at 100%."),
+                ("arrow.left.arrow.right", "Tap a teammate portrait to tag them in."),
+            ]
+            for (sym, text) in items {
+                let icon = UIImageView(image: UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .bold)))
+                icon.tintColor = UIColor(hex: 0x8FE3FF)
+                icon.contentMode = .center
+                icon.widthAnchor.constraint(equalToConstant: 26).isActive = true
+                let l = Glass.label(text, size: 14, weight: .semibold, align: .left)
+                l.numberOfLines = 2
+                let row = UIStackView(arrangedSubviews: [icon, l])
+                row.spacing = 10
+                row.alignment = .center
+                stack.addArrangedSubview(row)
+            }
+            let ok = Glass.button("Got it", style: .prominent, tint: .maRed, fontSize: 18) { [weak self] in
+                self?.dismissModal(self?.helpModal)
+            }
+            ok.heightAnchor.constraint(equalToConstant: 48).isActive = true
+            stack.setCustomSpacing(18, after: stack.arrangedSubviews.last!)
+            stack.addArrangedSubview(ok)
         }
-        let close = ButtonNode(text: "GOT IT", size: CGSize(width: 240, height: 70), color: UIColor(hex: 0xD9432F))
-        close.position = CGPoint(x: size.width / 2, y: 70)
-        close.action = { [weak self] in
-            self?.helpLayer?.removeFromParent()
-            self?.helpLayer = nil
-        }
-        layer.addChild(close)
-        addChild(layer)
-        helpLayer = layer
     }
 }

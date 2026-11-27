@@ -1,9 +1,13 @@
 import SpriteKit
+import UIKit
 
-final class ResultScene: SKScene {
+final class ResultScene: GameScene {
     let won: Bool
     let teamIDs: [String]
     let stage: Int
+    private var coins = 0
+    private var xp = 0
+    private var before: [Int] = []
 
     init(size: CGSize, won: Bool, teamIDs: [String], stage: Int) {
         self.won = won
@@ -18,17 +22,12 @@ final class ResultScene: SKScene {
         anchorPoint = .zero
         backgroundColor = .black
         let W = size.width
-        let H = size.height
         addChild(BackgroundNode(size: size, groundY: 120, theme: won ? 1 : 3))
-        let veil = SKShapeNode(rect: CGRect(origin: .zero, size: size))
-        veil.fillColor = UIColor(white: 0, alpha: 0.45)
-        veil.strokeColor = .clear
-        addChild(veil)
 
         let save = Save.shared
-        let coins = won ? 120 + stage * 15 : 40
-        let xp = won ? 140 + stage * 10 : 50
-        let before = teamIDs.map { save.level($0) }
+        coins = won ? 120 + stage * 15 : 40
+        xp = won ? 140 + stage * 10 : 50
+        before = teamIDs.map { save.level($0) }
         save.data.coins += coins
         for id in teamIDs { save.addXP(id, xp) }
         if won {
@@ -39,52 +38,98 @@ final class ResultScene: SKScene {
         }
         save.persist()
 
-        let title = ShadowLabel(won ? "VICTORY" : "DEFEAT", size: 96,
-                                color: won ? UIColor(hex: 0xFFD45A) : UIColor(hex: 0x9AA4C8))
-        title.position = CGPoint(x: W / 2, y: H - 110)
-        addChild(title)
-        let sub = makeLabel(won ? "Stage \(stage) cleared! Next: Stage \(stage + 1)" : "Train up and try Stage \(stage) again.",
-                            size: 24, color: UIColor(white: 1, alpha: 0.85), font: Fonts.bold)
-        sub.position = CGPoint(x: W / 2, y: H - 180)
-        addChild(sub)
+        for (i, id) in teamIDs.enumerated() {
+            let def = Roster.byID(id)
+            let f = FighterNode(def: def)
+            f.setScale(1.05 * def.bodyScale)
+            f.position = CGPoint(x: W / 2 + (CGFloat(i) - 1) * 300, y: 290)
+            f.setFacing(i == 2 ? -1 : 1)
+            addChild(f)
+            if won { f.burstAura(1.0) }
+        }
+        installUI(in: view)
+    }
 
-        let reward = ShadowLabel("◉ +\(coins)     XP +\(xp)", size: 34, color: UIColor(hex: 0xFFE7A8))
-        reward.position = CGPoint(x: W / 2, y: H - 240)
-        addChild(reward)
+    override func buildUI() {
+        let save = Save.shared
+        let header = Glass.panel(radius: 28, tint: (won ? UIColor.maGold : UIColor.systemGray).withAlphaComponent(0.25))
+        let title = Glass.label(won ? "Victory" : "Defeat", size: 40, weight: .black,
+                                color: won ? .maCoin : UIColor(hex: 0xC4CBE6))
+        let sub = Glass.label(won ? "Stage \(stage) cleared · next up: Stage \(stage + 1)" : "Train up and retry Stage \(stage)",
+                              size: 15, weight: .semibold, color: UIColor(white: 1, alpha: 0.8))
+        let reward = UIStackView()
+        reward.spacing = 18
+        for (sym, text, tint) in [("moon.stars.fill", "+\(coins)", UIColor.maCoin), ("star.fill", "+\(xp) XP", UIColor(hex: 0x8FE3FF))] {
+            let icon = UIImageView(image: UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .bold)))
+            icon.tintColor = tint
+            let l = Glass.label(text, size: 20, weight: .heavy)
+            let r = UIStackView(arrangedSubviews: [icon, l])
+            r.spacing = 6
+            r.alignment = .center
+            reward.addArrangedSubview(r)
+        }
+        let hs = UIStackView(arrangedSubviews: [title, sub, reward])
+        hs.axis = .vertical
+        hs.alignment = .center
+        hs.spacing = 4
+        hs.setCustomSpacing(10, after: sub)
+        hs.translatesAutoresizingMaskIntoConstraints = false
+        header.contentView.addSubview(hs)
+        ui.addSubview(header)
 
+        // Per-fighter level cards
+        let cards = UIStackView()
+        cards.spacing = 14
+        cards.distribution = .fillEqually
+        cards.translatesAutoresizingMaskIntoConstraints = false
         for (i, id) in teamIDs.enumerated() {
             let def = Roster.byID(id)
             let info = save.levelInfo(id)
-            let x = W / 2 + (CGFloat(i) - 1) * 260
-            let f = FighterNode(def: def)
-            f.setScale(0.95 * def.bodyScale)
-            f.position = CGPoint(x: x, y: 190)
-            addChild(f)
-            if won { f.burstAura(1.0) }
-            let name = makeLabel(def.name, size: 22, font: Fonts.bold)
-            name.position = CGPoint(x: x, y: 160)
-            addChild(name)
-            let lvl = makeLabel("Lv \(info.level)", size: 22, color: def.aura.lighter(0.3))
-            lvl.position = CGPoint(x: x, y: 132)
-            addChild(lvl)
-            let bar = BarNode(width: 160, height: 10, color: def.aura)
-            bar.position = CGPoint(x: x - 80, y: 108)
-            bar.set(CGFloat(info.into) / CGFloat(info.need), immediate: true)
-            addChild(bar)
-            if info.level > before[i] {
-                let up = ShadowLabel("LEVEL UP!", size: 26, color: UIColor(hex: 0x7CFF8A))
-                up.position = CGPoint(x: x, y: 395)
-                addChild(up)
-                up.run(.repeatForever(.sequence([.scale(to: 1.1, duration: 0.4), .scale(to: 1, duration: 0.4)])))
-            }
+            let card = Glass.panel(radius: 18, tint: def.aura.withAlphaComponent(0.2))
+            let name = Glass.label(def.name, size: 14, weight: .heavy)
+            let leveled = info.level > before[i]
+            let lvl = Glass.label(leveled ? "Lv \(info.level) · LEVEL UP!" : "Lv \(info.level)", size: 13, weight: .bold,
+                                  color: leveled ? UIColor(hex: 0x7CFF8A) : def.aura.lighter(0.4))
+            let meter = MeterView(color: def.aura)
+            meter.heightAnchor.constraint(equalToConstant: 6).isActive = true
+            meter.set(CGFloat(info.into) / CGFloat(info.need), immediate: true)
+            let st = UIStackView(arrangedSubviews: [name, lvl, meter])
+            st.axis = .vertical
+            st.spacing = 4
+            st.translatesAutoresizingMaskIntoConstraints = false
+            card.contentView.addSubview(st)
+            NSLayoutConstraint.activate([
+                st.leadingAnchor.constraint(equalTo: card.contentView.leadingAnchor, constant: 12),
+                st.trailingAnchor.constraint(equalTo: card.contentView.trailingAnchor, constant: -12),
+                st.topAnchor.constraint(equalTo: card.contentView.topAnchor, constant: 8),
+                st.bottomAnchor.constraint(equalTo: card.contentView.bottomAnchor, constant: -10),
+            ])
+            cards.addArrangedSubview(card)
         }
+        ui.addSubview(cards)
 
-        let cont = ButtonNode(text: "CONTINUE", size: CGSize(width: 280, height: 80), color: UIColor(hex: 0xD9432F), fontSize: 32)
-        cont.position = CGPoint(x: W - Layout.safeRight - 170, y: 60)
-        cont.action = { [weak self] in
+        let cont = Glass.button("Continue", symbol: "arrow.right", style: .prominent, tint: .maRed, fontSize: 20) { [weak self] in
             guard let self else { return }
             self.transition(to: HomeScene(size: self.size))
         }
-        addChild(cont)
+        ui.addSubview(cont)
+
+        NSLayoutConstraint.activate([
+            header.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            header.topAnchor.constraint(equalTo: safe.topAnchor, constant: 10),
+            hs.leadingAnchor.constraint(equalTo: header.contentView.leadingAnchor, constant: 30),
+            hs.trailingAnchor.constraint(equalTo: header.contentView.trailingAnchor, constant: -30),
+            hs.topAnchor.constraint(equalTo: header.contentView.topAnchor, constant: 10),
+            hs.bottomAnchor.constraint(equalTo: header.contentView.bottomAnchor, constant: -12),
+
+            cards.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            cards.bottomAnchor.constraint(equalTo: cont.topAnchor, constant: -10),
+            cards.widthAnchor.constraint(equalToConstant: 480),
+
+            cont.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            cont.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -10),
+            cont.widthAnchor.constraint(equalToConstant: 200),
+            cont.heightAnchor.constraint(equalToConstant: 52),
+        ])
     }
 }

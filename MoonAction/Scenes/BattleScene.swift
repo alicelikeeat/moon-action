@@ -1,6 +1,6 @@
 import SpriteKit
 
-final class BattleScene: SKScene {
+final class BattleScene: GameScene {
     let playerIDs: [String]
     let enemyIDs: [String]
     let enemyLevel: Int
@@ -29,29 +29,9 @@ final class BattleScene: SKScene {
     var aiDodgeChance: Double { min(0.5, 0.16 + Double(stage) * 0.017) }
 
     // HUD
-    var pHP: BarNode!
-    var eHP: BarNode!
-    var pName: ShadowLabel!
-    var eName: ShadowLabel!
-    var pSoulBar: BarNode!
-    var eSoulBar: BarNode!
-    var timerLabel: ShadowLabel!
-    var energyBar: BarNode!
-    var energyLabel: ShadowLabel!
-    var cardButtons: [CardButton] = []
-    var specialBtn: ButtonNode!
-    var specialCD: SKLabelNode!
-    var ultBtn: ButtonNode!
-    var ultRing: SKShapeNode!
-    var ultLabel: SKLabelNode!
-    var chargeBtn: ButtonNode!
-    var dodgeBtn: ButtonNode!
-    var dodgePips: [SKShapeNode] = []
-    var pPortraits: [PortraitButton] = []
-    var ePortraits: [PortraitButton] = []
+    var hudView: BattleHUD?
     var comboLabel: ShadowLabel!
-    var lastUltPct = -1
-    var pauseLayer: SKNode?
+    private var pauseModal: UIView?
     private var touchStart: [UITouch: CGPoint] = [:]
 
     var minX: CGFloat { Layout.safeLeft + 60 }
@@ -87,7 +67,11 @@ final class BattleScene: SKScene {
         fillHand(player)
         fillHand(enemy)
         updateFacing(force: true)
-        buildHUD()
+        comboLabel = ShadowLabel("", size: 44, color: UIColor(hex: 0xFFD45A))
+        comboLabel.position = CGPoint(x: Layout.safeLeft + 150, y: size.height * 0.55)
+        comboLabel.alpha = 0
+        hud.addChild(comboLabel)
+        installUI(in: view)
         intro()
     }
 
@@ -148,7 +132,7 @@ final class BattleScene: SKScene {
             if !battleOver { aiUpdate() }
         }
         updateFacing(force: false)
-        updateHUD(CGFloat(dt))
+        hudView?.update(dt: CGFloat(dt))
     }
 
     func canAct(_ s: Side) -> Bool {
@@ -805,36 +789,34 @@ final class BattleScene: SKScene {
 
     // MARK: - Pause
 
+    override func buildUI() {
+        hudView = BattleHUD(scene: self, root: ui)
+    }
+
     func setPaused(_ p: Bool) {
-        guard !battleOver else { return }
+        guard !battleOver, p != pausedGame else { return }
         pausedGame = p
         world.isPaused = p
         player.charging = false
         player.moveDir = 0
-        pauseLayer?.removeFromParent()
-        pauseLayer = nil
-        guard p else { return }
-        let layer = SKNode()
-        layer.zPosition = 300
-        let dim = SKShapeNode(rect: CGRect(origin: .zero, size: size))
-        dim.fillColor = UIColor(white: 0, alpha: 0.7)
-        dim.strokeColor = .clear
-        layer.addChild(dim)
-        let title = ShadowLabel("PAUSED", size: 64)
-        title.position = CGPoint(x: size.width / 2, y: size.height / 2 + 120)
-        layer.addChild(title)
-        let resume = ButtonNode(text: "RESUME", size: CGSize(width: 300, height: 76), color: UIColor(hex: 0x2F8FE8))
-        resume.position = CGPoint(x: size.width / 2, y: size.height / 2 + 10)
-        resume.action = { [weak self] in self?.setPaused(false) }
-        layer.addChild(resume)
-        let quit = ButtonNode(text: "RETREAT", size: CGSize(width: 300, height: 76), color: UIColor(hex: 0x8A2C3A))
-        quit.position = CGPoint(x: size.width / 2, y: size.height / 2 - 90)
-        quit.action = { [weak self] in
-            guard let self else { return }
-            self.transition(to: HomeScene(size: self.size))
+        if !p {
+            dismissModal(pauseModal)
+            pauseModal = nil
+            return
         }
-        layer.addChild(quit)
-        addChild(layer)
-        pauseLayer = layer
+        pauseModal = presentModal(width: 320) { stack in
+            stack.addArrangedSubview(Glass.label("Paused", size: 28, weight: .heavy))
+            let resume = Glass.button("Resume", symbol: "play.fill", style: .prominent, tint: .maBlue, fontSize: 19) { [weak self] in
+                self?.setPaused(false)
+            }
+            let quit = Glass.button("Retreat", symbol: "flag.fill", style: .regular, fontSize: 19) { [weak self] in
+                guard let self else { return }
+                self.transition(to: HomeScene(size: self.size))
+            }
+            for b in [resume, quit] {
+                b.heightAnchor.constraint(equalToConstant: 52).isActive = true
+                stack.addArrangedSubview(b)
+            }
+        }
     }
 }

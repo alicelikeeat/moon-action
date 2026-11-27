@@ -1,10 +1,12 @@
 import SpriteKit
+import UIKit
 
-final class TeamSelectScene: SKScene {
+final class TeamSelectScene: GameScene {
     private var selected: [String] = []
     private var tiles: [FighterTile] = []
-    private var fightBtn: ButtonNode!
+    private var fightBtn: UIButton?
     private var enemyIDs: [String] = []
+    private var teamLabel: UILabel?
 
     override func didMove(to view: SKView) {
         anchorPoint = .zero
@@ -13,26 +15,6 @@ final class TeamSelectScene: SKScene {
         let W = size.width
         let H = size.height
         addChild(BackgroundNode(size: size, groundY: 120, theme: 2))
-        let veil = SKShapeNode(rect: CGRect(origin: .zero, size: size))
-        veil.fillColor = UIColor(white: 0, alpha: 0.35)
-        veil.strokeColor = .clear
-        addChild(veil)
-
-        let title = ShadowLabel("CHOOSE YOUR TEAM", size: 44)
-        title.position = CGPoint(x: W / 2, y: H - 50)
-        addChild(title)
-        let hint = makeLabel("Pick 3 fighters. The first one starts the battle.", size: 20,
-                             color: UIColor(white: 1, alpha: 0.75), font: Fonts.demi)
-        hint.position = CGPoint(x: W / 2, y: H - 92)
-        addChild(hint)
-
-        let back = ButtonNode(text: "BACK", size: CGSize(width: 130, height: 56), color: UIColor(white: 0.15, alpha: 0.85), fontSize: 22, corner: 12)
-        back.position = CGPoint(x: Layout.safeLeft + 85, y: H - 50)
-        back.action = { [weak self] in
-            guard let self else { return }
-            self.transition(to: HomeScene(size: self.size))
-        }
-        addChild(back)
 
         selected = save.data.team.filter { save.isUnlocked($0) }
         let all = Roster.all
@@ -46,46 +28,88 @@ final class TeamSelectScene: SKScene {
             let unlocked = save.isUnlocked(def.id)
             let tile = FighterTile(def: def, level: unlocked ? save.level(def.id) : nil, locked: !unlocked)
             tile.setScale(scale)
-            tile.position = CGPoint(x: x, y: H * 0.52)
+            tile.position = CGPoint(x: x, y: H * 0.53)
             tile.onTap = { [weak self] t in self?.toggle(t) }
             addChild(tile)
             tiles.append(tile)
             x += (tileW + gap) * scale
         }
-
-        // Enemy preview
-        let stage = save.data.stage
-        let pool = Roster.all.map { $0.id }.shuffled()
-        enemyIDs = Array(pool.prefix(3))
-        let enemyLevel = BattleSetup.enemyLevel(stage: stage)
-        let foe = makeLabel("STAGE \(stage) OPPONENTS  ·  Lv \(enemyLevel)", size: 20, color: UIColor(hex: 0xFF8A80), font: Fonts.bold)
-        foe.position = CGPoint(x: W / 2 - 200, y: 150)
-        addChild(foe)
-        for (i, id) in enemyIDs.enumerated() {
-            let def = Roster.byID(id)
-            let circle = SKShapeNode(circleOfRadius: 30)
-            circle.fillColor = def.aura.darker(0.6)
-            circle.strokeColor = UIColor(hex: 0xFF8A80)
-            circle.lineWidth = 2
-            circle.position = CGPoint(x: W / 2 - 290 + CGFloat(i) * 80, y: 92)
-            let crop = SKCropNode()
-            let mask = SKShapeNode(circleOfRadius: 28)
-            mask.fillColor = .white
-            crop.maskNode = mask
-            let face = FighterNode.portrait(def)
-            face.setScale(-1.05)
-            face.yScale = 1.05
-            face.position = CGPoint(x: 3, y: -4)
-            crop.addChild(face)
-            circle.addChild(crop)
-            addChild(circle)
-        }
-
-        fightBtn = ButtonNode(text: "FIGHT!", size: CGSize(width: 300, height: 90), color: UIColor(hex: 0xD9432F), fontSize: 40)
-        fightBtn.position = CGPoint(x: W - Layout.safeRight - 190, y: 100)
-        fightBtn.action = { [weak self] in self?.startBattle() }
-        addChild(fightBtn)
+        enemyIDs = Array(Roster.all.map { $0.id }.shuffled().prefix(3))
+        installUI(in: view)
         refresh()
+    }
+
+    override func buildUI() {
+        let stage = Save.shared.data.stage
+        let back = Glass.button(symbol: "chevron.left", fontSize: 17) { [weak self] in
+            guard let self else { return }
+            self.transition(to: HomeScene(size: self.size))
+        }
+        ui.addSubview(back)
+
+        let header = Glass.panel(radius: 24)
+        let title = Glass.label("Choose Your Team", size: 22, weight: .heavy)
+        let hint = Glass.label("Pick 3 fighters · the first one starts the battle", size: 13, weight: .semibold,
+                               color: UIColor(white: 1, alpha: 0.7))
+        let hs = UIStackView(arrangedSubviews: [title, hint])
+        hs.axis = .vertical
+        hs.spacing = 2
+        hs.translatesAutoresizingMaskIntoConstraints = false
+        header.contentView.addSubview(hs)
+        ui.addSubview(header)
+
+        // Opponent preview
+        let foe = Glass.panel(radius: 22, tint: UIColor.maRed.withAlphaComponent(0.25))
+        let foeTitle = Glass.label("Stage \(stage) · Opponents Lv \(BattleSetup.enemyLevel(stage: stage))", size: 13,
+                                   weight: .bold, color: UIColor(hex: 0xFFB3AA), align: .left)
+        let foeNames = Glass.label(enemyIDs.map { Roster.byID($0).name }.joined(separator: "  ·  "), size: 15,
+                                   weight: .heavy, align: .left)
+        let fs = UIStackView(arrangedSubviews: [foeTitle, foeNames])
+        fs.axis = .vertical
+        fs.spacing = 2
+        fs.translatesAutoresizingMaskIntoConstraints = false
+        foe.contentView.addSubview(fs)
+        ui.addSubview(foe)
+
+        let team = Glass.label("", size: 14, weight: .semibold, color: UIColor(white: 1, alpha: 0.8))
+        teamLabel = team
+        ui.addSubview(team)
+
+        let fight = Glass.button("Fight!", symbol: "bolt.fill", style: .prominent, tint: .maRed, fontSize: 24) { [weak self] in
+            self?.startBattle()
+        }
+        fightBtn = fight
+        ui.addSubview(fight)
+
+        NSLayoutConstraint.activate([
+            back.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
+            back.topAnchor.constraint(equalTo: safe.topAnchor, constant: 12),
+            back.widthAnchor.constraint(equalToConstant: 48),
+            back.heightAnchor.constraint(equalToConstant: 48),
+
+            header.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            header.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8),
+            hs.leadingAnchor.constraint(equalTo: header.contentView.leadingAnchor, constant: 24),
+            hs.trailingAnchor.constraint(equalTo: header.contentView.trailingAnchor, constant: -24),
+            hs.topAnchor.constraint(equalTo: header.contentView.topAnchor, constant: 8),
+            hs.bottomAnchor.constraint(equalTo: header.contentView.bottomAnchor, constant: -8),
+
+            foe.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
+            foe.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -12),
+            fs.leadingAnchor.constraint(equalTo: foe.contentView.leadingAnchor, constant: 18),
+            fs.trailingAnchor.constraint(equalTo: foe.contentView.trailingAnchor, constant: -18),
+            fs.topAnchor.constraint(equalTo: foe.contentView.topAnchor, constant: 8),
+            fs.bottomAnchor.constraint(equalTo: foe.contentView.bottomAnchor, constant: -8),
+            foe.trailingAnchor.constraint(lessThanOrEqualTo: fight.leadingAnchor, constant: -16),
+
+            fight.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -16),
+            fight.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -12),
+            fight.widthAnchor.constraint(equalToConstant: 190),
+            fight.heightAnchor.constraint(equalToConstant: 58),
+
+            team.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            team.bottomAnchor.constraint(equalTo: foe.topAnchor, constant: -10),
+        ])
     }
 
     private func toggle(_ tile: FighterTile) {
@@ -102,6 +126,7 @@ final class TeamSelectScene: SKScene {
             selected[2] = id
         }
         Sound.play(.card)
+        UISelectionFeedbackGenerator().selectionChanged()
         refresh()
     }
 
@@ -109,7 +134,10 @@ final class TeamSelectScene: SKScene {
         for t in tiles {
             t.setSelected(selected.firstIndex(of: t.def.id).map { $0 + 1 })
         }
-        fightBtn.enabled = selected.count == 3
+        fightBtn?.isEnabled = selected.count == 3
+        fightBtn?.alpha = selected.count == 3 ? 1 : 0.5
+        teamLabel?.text = selected.isEmpty ? "Tap fighters to build your team"
+            : selected.map { Roster.byID($0).name }.joined(separator: "  →  ")
     }
 
     private func startBattle() {
