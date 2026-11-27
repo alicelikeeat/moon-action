@@ -71,19 +71,19 @@ class Screen {
     }
 
     func chip(symbol: String, text: String, tint: UIColor) -> (UIView, UILabel) {
-        let panel = Glass.panel(radius: 20)
-        let icon = UIImageView(image: UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .bold)))
+        let panel = Glass.panel(radius: 18)
+        let icon = UIImageView(image: UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)))
         icon.tintColor = tint
-        let label = Glass.label(text, size: 16, weight: .heavy, align: .left)
+        let label = Glass.label(text, size: 14, weight: .semibold, align: .left, mono: true)
         let row = UIStackView(arrangedSubviews: [icon, label])
         row.spacing = 7
         row.alignment = .center
         row.translatesAutoresizingMaskIntoConstraints = false
         panel.contentView.addSubview(row)
         NSLayoutConstraint.activate([
-            panel.heightAnchor.constraint(equalToConstant: 40),
-            row.leadingAnchor.constraint(equalTo: panel.contentView.leadingAnchor, constant: 14),
-            row.trailingAnchor.constraint(equalTo: panel.contentView.trailingAnchor, constant: -16),
+            panel.heightAnchor.constraint(equalToConstant: 36),
+            row.leadingAnchor.constraint(equalTo: panel.contentView.leadingAnchor, constant: 12),
+            row.trailingAnchor.constraint(equalTo: panel.contentView.trailingAnchor, constant: -14),
             row.centerYAnchor.constraint(equalTo: panel.contentView.centerYAnchor),
         ])
         return (panel, label)
@@ -100,11 +100,11 @@ class Screen {
 
     /// Simple glass header with title + subtitle.
     func header(_ title: String, _ subtitle: String?, tint: UIColor? = nil) -> UIView {
-        let panel = Glass.panel(radius: 24, tint: tint)
-        let t = Glass.label(title, size: 21, weight: .heavy)
+        let panel = Glass.panel(radius: 22, tint: tint)
+        let t = Glass.label(title, size: 17, weight: .semibold)
         var views: [UIView] = [t]
         if let subtitle {
-            views.append(Glass.label(subtitle, size: 12, weight: .semibold, color: UIColor(white: 1, alpha: 0.72)))
+            views.append(Glass.label(subtitle, size: 11, weight: .medium, color: Theme.text2))
         }
         let st = UIStackView(arrangedSubviews: views)
         st.axis = .vertical

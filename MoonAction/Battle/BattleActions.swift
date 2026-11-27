@@ -53,9 +53,16 @@ extension BattleScreen {
             if s.chain >= 1 { hud.chain(s.chain + 1) }
         }
         s.cardLanded = false
-        let mul = 1 + min(0.5, Double(s.chain) * 0.1)
+        var mul = 1 + min(0.5, Double(s.chain) * 0.1)
+        if now < s.counterUntil && card.kind != .effect {
+            mul *= 1.2
+            s.counterUntil = 0
+            popup(L("battle.counter"), at: s.current.chest + SIMD3(0, 0.9, 0), color: Theme.accent, size: 22)
+        }
         switch card.kind {
-        case .strike: doStrike(s, power: card.power * mul, hits: card.hits, style: .normal)
+        case .strike:
+            let chase = now < opponent(of: s).current.launchedUntil
+            doStrike(s, power: card.power * mul * (chase ? 1.15 : 1), hits: card.hits, style: .normal, chase: chase)
         case .blast: doBlast(s, power: card.power * mul, hits: card.hits)
         case .special: doSpecial(s, card: card, mul: mul)
         case .effect: doEffect(s, card)
@@ -111,12 +118,17 @@ extension BattleScreen {
     @discardableResult
     func dodge(_ s: Side, lateral: Float) -> Bool {
         let c = s.current
-        guard started, !battleOver, !cinematic, !c.isKO, s.dodge >= Tune.dodgeCost else { return false }
-        s.dodge -= Tune.dodgeCost
+        let escaping = now < c.stunUntil
+        let cost = Tune.dodgeCost * (escaping ? 2 : 1)
+        guard started, !battleOver, !cinematic, !c.isKO, s.dodge >= cost else { return false }
+        s.dodge -= cost
         timeline.cancel(tag: c)
         c.busy = false
         c.stunUntil = 0
-        c.invulnUntil = now + Tune.dodgeInvuln
+        c.invulnUntil = now + c.def.speed.invuln
+        c.vanishStart = now
+        c.perfectUsed = false
+        if escaping { popup(L("battle.escape"), at: c.chest + SIMD3(0, 0.9, 0), color: Theme.energy, size: 18) }
         c.model.afterimage(in: fxRoot)
         let t = opponent(of: s).current
         let rel = c.pos - t.pos
@@ -124,10 +136,11 @@ extension BattleScreen {
         let rot = SIMD2(rel.x * cos(ang) - rel.y * sin(ang), rel.x * sin(ang) + rel.y * cos(ang))
         var dest = t.pos + rot
         if simd_length(dest) > Tune.arenaRadius { dest = t.pos + SIMD2(rel.x * cos(-ang) - rel.y * sin(-ang), rel.x * sin(-ang) + rel.y * cos(-ang)) }
-        moveTo(c, dest, 0.12)
+        let travel = c.def.speed.vanishTime
+        moveTo(c, dest, travel)
         c.model.stance()
         c.model.setVisible(false)
-        timeline.after(0.12) { c.model.setVisible(true) }
+        timeline.after(travel) { c.model.setVisible(true) }
         Sound.play(.dodge)
         if s.isPlayer { hud.flashEvade() }
         return true
@@ -137,7 +150,7 @@ extension BattleScreen {
 
     enum StrikeStyle { case normal, basic, rush, eclipse }
 
-    func doStrike(_ s: Side, power: Double, hits: Int, style: StrikeStyle) {
+    func doStrike(_ s: Side, power: Double, hits: Int, style: StrikeStyle, chase: Bool = false) {
         let a = s.current
         let o = opponent(of: s)
         let t = o.current
@@ -145,8 +158,20 @@ extension BattleScreen {
         timeline.cancel(tag: a)
         let d = dist(a, t)
         var steps: [(Double, () -> Void)] = []
-        if d > Tune.meleeStop + 0.25 {
-            let speed: Float = style == .rush || style == .eclipse ? 30 : 21
+        if chase {
+            // Teleport chase: blink to the far side of the launched opponent and keep the combo going.
+            a.model.afterimage(in: fxRoot)
+            var fly = t.knockVel
+            if simd_length(fly) < 0.01 { fly = dirTo(a, t) }
+            a.tween = nil
+            a.knockVel = .zero
+            a.pos = t.pos + simd_normalize(fly) * Tune.meleeStop
+            t.knockVel *= 0.2
+            popup(L("battle.chase"), at: a.chest + SIMD3(0, 0.9, 0), color: Theme.energy, size: 20)
+            Sound.play(.dodge)
+            if s.isPlayer { hud.flashEvade() }
+        } else if d > Tune.meleeStop + 0.25 {
+            let speed: Float = a.def.speed.dashSpeed * (style == .rush || style == .eclipse ? 1.25 : 1)
             let dashT = Double(max(0.07, (d - Tune.meleeStop) / speed))
             steps.append((0, { [weak self] in
                 guard let self else { return }
@@ -159,7 +184,8 @@ extension BattleScreen {
             steps.append((dashT, {}))
         }
         let interval: Double = style == .basic ? 0.16 : (style == .rush || style == .eclipse ? 0.085 : 0.12)
-        let per = power / Double(hits)
+        let nearBonus = RangeZone.of(d) == .near ? 1.1 : 1.0
+        let per = power / Double(hits) * nearBonus
         for i in 0..<hits {
             let last = i == hits - 1
             steps.append((i == 0 ? 0.02 : interval, { [weak self] in
@@ -243,7 +269,8 @@ extension BattleScreen {
         n.addParticleSystem(Toon.trail(a.def.aura, size: CGFloat(radius * 2.2)))
         n.simdPosition = start
         fxRoot.addChildNode(n)
-        projectiles.append(Projectile(node: n, owner: s, pos: start, vel: dir * Tune.blastSpeed, radius: radius, power: power))
+        let farBonus = RangeZone.of(dist(a, t)) == .far ? 1.1 : 1.0
+        projectiles.append(Projectile(node: n, owner: s, pos: start, vel: dir * Tune.blastSpeed, radius: radius, power: power * farBonus))
         Sound.play(.blast)
     }
 
@@ -267,7 +294,7 @@ extension BattleScreen {
                     if now < t.invulnUntil {
                         if !p.evadeShown {
                             p.evadeShown = true
-                            showEvade(t)
+                            evaded(o, by: p.owner)
                         }
                     } else {
                         p.alive = false
@@ -303,7 +330,7 @@ extension BattleScreen {
         let a = s.current
         a.busy = true
         timeline.cancel(tag: a)
-        hud.moveBanner(card.name, kind: .special, side: s)
+        hud.moveBanner(card.name.s, kind: .special, side: s)
         Sound.play(.charge)
         a.auraBurstUntil = now + 0.6
         let (pos, look) = frontShot(a, distance: 2.6, height: 1.5, side: s.isPlayer ? 1.0 : -1.0)
@@ -379,12 +406,12 @@ extension BattleScreen {
             let t = o.current
             guard !t.isKO else { return }
             if self.now < t.invulnUntil {
-                self.showEvade(t)
+                self.evaded(o, by: s)
                 return
             }
             if (!o.isPlayer || o.auto) && self.canAIDodge(o) && chance(self.aiDodgeChance * (ultimate ? 1.1 : 1)) {
                 self.dodge(o, lateral: chance(0.5) ? 1 : -1)
-                self.showEvade(t)
+                self.aiEvade(o, by: s)
                 return
             }
             locked = true
@@ -451,12 +478,12 @@ extension BattleScreen {
             guard !t.isKO else { return }
             let near = simd_length(t.world3 - impact) < 3.6
             if !near || self.now < t.invulnUntil {
-                self.showEvade(t)
+                if near { self.evaded(o, by: s) } else { self.showEvade(t) }
                 return
             }
             if (!o.isPlayer || o.auto) && self.canAIDodge(o) && chance(self.aiDodgeChance) {
                 self.dodge(o, lateral: chance(0.5) ? 1 : -1)
-                self.showEvade(t)
+                self.aiEvade(o, by: s)
                 return
             }
             let ticks = 5
@@ -538,32 +565,32 @@ extension BattleScreen {
         timeline.cancel(tag: a)
         a.model.apply(FighterModel.chargePose, duration: 0.12)
         a.auraBurstUntil = now + 0.5
-        hud.moveBanner(card.name, kind: .effect, side: s)
+        hud.moveBanner(card.name.s, kind: .effect, side: s)
         Sound.play(.charge)
         let st = CardArt.style(card)
         switch card.effect {
         case .heal(let f)?:
             let amount = a.maxHP * f
             a.hp = min(a.maxHP, a.hp + amount)
-            popup("+\(Int(amount))", at: a.chest + SIMD3(0, 0.6, 0), color: .maGreen, size: 26)
-            SCNNode.emit(Toon.burst(.maGreen, count: 60, speed: 2.5, size: 0.25, life: 0.8, streaks: false), at: a.chest, in: fxRoot)
+            popup("+\(Int(amount))", at: a.chest + SIMD3(0, 0.6, 0), color: Theme.effect, size: 26)
+            SCNNode.emit(Toon.burst(Theme.effect, count: 60, speed: 2.5, size: 0.25, life: 0.8, streaks: false), at: a.chest, in: fxRoot)
         case .barrier(let t)?:
             a.barrierUntil = now + t
         case .powerUp(let t)?:
             a.powerUntil = now + t
-            popup("ATK UP", at: a.chest + SIMD3(0, 0.7, 0), color: UIColor(hex: 0xFF8A5E), size: 22)
+            popup(L("battle.atkup"), at: a.chest + SIMD3(0, 0.7, 0), color: UIColor(hex: 0xFF8A5E), size: 22)
         case .energy(let v)?:
             s.energy = min(Tune.energyMax, s.energy + v)
-            popup("+\(Int(v)) EN", at: a.chest + SIMD3(0, 0.7, 0), color: UIColor(hex: 0x7FE8FF), size: 22)
+            popup(L10n.f("battle.en", Int(v)), at: a.chest + SIMD3(0, 0.7, 0), color: UIColor(hex: 0x7FE8FF), size: 22)
         case .curse(let t)?:
             o.current.cursedUntil = now + t
-            popup("DEF DOWN", at: o.current.chest + SIMD3(0, 0.7, 0), color: UIColor(hex: 0xD58CFF), size: 22)
+            popup(L("battle.defdown"), at: o.current.chest + SIMD3(0, 0.7, 0), color: UIColor(hex: 0xD58CFF), size: 22)
             SCNNode.emit(Toon.burst(UIColor(hex: 0xB04CFF), count: 50, speed: 2, size: 0.3, life: 0.7, streaks: false),
                          at: o.current.chest, in: fxRoot)
         case nil:
             break
         }
-        SCNNode.emit(Toon.burst(st.top, count: 40, speed: 3, size: 0.2, life: 0.5), at: a.chest, in: fxRoot)
+        SCNNode.emit(Toon.burst(st.color, count: 40, speed: 3, size: 0.2, life: 0.5), at: a.chest, in: fxRoot)
         timeline.sequence(tag: a, [
             (0.35, { [weak self] in
                 guard let self else { return }
@@ -574,6 +601,54 @@ extension BattleScreen {
                 a.model.stance()
             }),
         ])
+    }
+
+    // MARK: - Evasion
+
+    /// Called when an attack from `s` misses `o` because of evade invulnerability.
+    func evaded(_ o: Side, by s: Side) {
+        let t = o.current
+        if !t.perfectUsed && now - t.vanishStart <= t.def.speed.perfectWindow {
+            perfectEvade(o, attacker: s)
+        } else {
+            showEvade(t)
+        }
+    }
+
+    /// AI evades happen at the last instant; some of them count as perfect.
+    func aiEvade(_ o: Side, by s: Side) {
+        let p = o.isPlayer ? 0.4 : min(0.55, 0.25 + Double(stage) * 0.015)
+        if chance(p) { perfectEvade(o, attacker: s) } else { showEvade(o.current) }
+    }
+
+    /// Perfect evade: slow-mo, teleport behind the attacker, attacker is left open, counter window.
+    func perfectEvade(_ o: Side, attacker s: Side) {
+        let t = o.current
+        let a = s.current
+        t.perfectUsed = true
+        popup(L("battle.perfect"), at: t.chest + SIMD3(0, 1.0, 0), color: Theme.accent, size: 22)
+        timeScale = 0.3
+        realDelay(0.45) { [weak self] in self?.timeScale = 1 }
+        t.model.afterimage(in: fxRoot)
+        let dir = dirTo(t, a)
+        t.tween = nil
+        t.knockVel = .zero
+        t.pos = a.pos + dir * 1.35
+        t.invulnUntil = max(t.invulnUntil, now + 0.35)
+        if !a.isKO {
+            timeline.cancel(tag: a)
+            a.busy = false
+            a.stunUntil = now + 0.75
+            a.model.stance()
+        }
+        o.dodge = min(Tune.dodgeMax, o.dodge + 15)
+        o.counterUntil = now + 1.6
+        Sound.play(.dodge)
+        if o.isPlayer {
+            hud.flashEvade()
+            Haptics.rigid.impactOccurred()
+        }
+        fovKick = 6
     }
 
     // MARK: - Hits
@@ -598,18 +673,19 @@ extension BattleScreen {
         let a = s.current
         guard !t.isKO, !battleOver else { return false }
         if !ignoreInvuln && now < t.invulnUntil {
-            showEvade(t)
+            evaded(o, by: s)
             return false
         }
         if aiDodge > 0 && canAIDodge(o) && chance(aiDodge) {
             dodge(o, lateral: chance(0.5) ? 1 : -1)
-            showEvade(t)
+            aiEvade(o, by: s)
             return false
         }
         var dmg = power * a.atk * (1200 / (1000 + t.dfn * (now < t.cursedUntil ? 0.7 : 1))) * 1.25
         dmg *= Double.random(in: 0.94...1.06)
         if now < a.powerUntil { dmg *= 1.3 }
         if now < t.barrierUntil { dmg *= 0.4 }
+        dmg *= 1 + min(0.3, Double(max(0, s.comboCount - 4)) * 0.02)
         let crit = chance(0.08)
         if crit { dmg *= 1.5 }
         dmg = dmg.rounded()
@@ -622,6 +698,7 @@ extension BattleScreen {
         away = simd_length(away) > 0.001 ? simd_normalize(away) : SIMD2(0, 1)
         t.tween = nil
         t.knockVel = away * knock
+        if heavy && knock >= 8 { t.launchedUntil = now + 0.75 }
         t.model.hurt(heavy: heavy)
         if !basic { s.cardLanded = true }
         if basic { s.energy = min(Tune.energyMax, s.energy + 2) }
@@ -629,7 +706,7 @@ extension BattleScreen {
         let hitPoint = t.chest + SIMD3(0, 0.1, 0)
         spark(at: hitPoint, color: a.def.aura, big: heavy || crit)
         popup(crit ? "\(Int(dmg))!" : "\(Int(dmg))", at: hitPoint + SIMD3(Float.random(in: -0.3...0.3), 0.5, 0),
-              color: crit ? .maCoin : .white, size: crit ? 30 : (heavy ? 26 : 21))
+              color: crit ? Theme.accent : .white, size: crit ? 24 : (heavy ? 20 : 16))
         shake = max(shake, heavy ? 0.16 : 0.04)
         if heavy {
             hitStop = 0.07
@@ -657,7 +734,7 @@ extension BattleScreen {
         c.model.ko()
         Sound.play(.ko)
         shake = 0.3
-        hud.banner("K.O.", color: UIColor(hex: 0xFF5A5A), big: true, duration: 0.9)
+        hud.banner(L("battle.ko"), color: Theme.hpEnemy, big: true, duration: 0.9)
         timeScale = 0.3
         realDelay(0.7) { [weak self] in self?.timeScale = 1 }
         let attacker = opponent(of: side).current
@@ -698,7 +775,7 @@ extension BattleScreen {
         SCNNode.emit(Toon.burst(n.def.aura, count: 70, speed: 5, size: 0.3, life: 0.5), at: n.chest, in: fxRoot)
         fillHand(s)
         updateFacing()
-        hud.moveBanner("TAG IN · \(n.def.name)", kind: .strike, side: s)
+        hud.moveBanner(L10n.f("battle.tagin", n.def.name.s), kind: .strike, side: s)
         Sound.play(.charge)
         if s.isPlayer { hud.teamChanged() }
     }
@@ -706,7 +783,7 @@ extension BattleScreen {
     func timeUp() {
         let pf = player.team.reduce(0.0) { $0 + max(0, $1.hp) / $1.maxHP }
         let ef = enemy.team.reduce(0.0) { $0 + max(0, $1.hp) / $1.maxHP }
-        hud.banner("TIME UP", color: .maCoin, big: true, duration: 1.2)
+        hud.banner(L("battle.timeup"), color: Theme.accent, big: true, duration: 1.2)
         endBattle(playerWon: pf > ef)
     }
 

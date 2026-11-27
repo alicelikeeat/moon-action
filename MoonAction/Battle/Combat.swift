@@ -16,6 +16,16 @@ enum Tune {
     static let arenaRadius: Float = 12
     static let blastSpeed: Float = 24
     static let shardsNeeded = 7
+    /// Start distances: near / mid / far
+    static let startDistances: [Float] = [2.6, 6.2, 11.0]
+    static let nearMax: Float = 3.6
+    static let midMax: Float = 8.0
+}
+
+enum RangeZone: Int {
+    case near, mid, far
+    var key: String { ["range.near", "range.mid", "range.far"][rawValue] }
+    static func of(_ d: Float) -> RangeZone { d < Tune.nearMax ? .near : (d < Tune.midMax ? .mid : .far) }
 }
 
 @MainActor
@@ -38,6 +48,9 @@ final class Combatant {
     var tween: (from: SIMD2<Float>, to: SIMD2<Float>, t0: Double, dur: Double)?
     var knockVel: SIMD2<Float> = .zero
     var wasCharging = false
+    var vanishStart = -10.0
+    var perfectUsed = true
+    var launchedUntil = 0.0
     var auraBurstUntil = 0.0
 
     var isKO: Bool { hp <= 0 }
@@ -88,6 +101,7 @@ final class Side {
     var lastHitTime = -10.0
     var swapReadyAt = 0.0
     var cardLanded = false
+    var counterUntil = 0.0
 
     var current: Combatant { team[active] }
     var allKO: Bool { team.allSatisfy { $0.isKO } }

@@ -31,8 +31,8 @@ final class HomeScreen: Screen {
     override func update(dt: Double) {
         t += dt
         let a = Float(sin(t * 0.18) * 0.45)
-        arena.camera.simdPosition = SIMD3(sin(a) * 5.4, 1.75, cos(a) * 5.4)
-        arena.camera.simdLook(at: SIMD3(0, 1.55, 0))
+        arena.camera.simdPosition = SIMD3(sin(a) * 5.6, 1.7, cos(a) * 5.6)
+        arena.camera.simdLook(at: SIMD3(0, 1.45, 0))
         if t > nextMove, let lead = models.first {
             nextMove = t + 2.6
             moveIndex += 1
@@ -46,47 +46,60 @@ final class HomeScreen: Screen {
 
     private func buildUI() {
         let save = Save.shared
-        let (record, _) = chip(symbol: "trophy.fill", text: "\(save.data.wins)W · \(save.data.losses)L", tint: .maGold)
-        let (coins, _) = chip(symbol: "moon.stars.fill", text: "\(save.data.coins)", tint: .maCoin)
-        let sound = Glass.button(symbol: save.data.soundOn ? "speaker.wave.2.fill" : "speaker.slash.fill", fontSize: 15)
+        let (record, _) = chip(symbol: "trophy.fill", text: L10n.f("home.record", save.data.wins, save.data.losses), tint: Theme.accent)
+        let (coins, _) = chip(symbol: "moon.stars.fill", text: "\(save.data.coins)", tint: Theme.accent)
+        let lang = Glass.button(L("lang"), style: .secondary, fontSize: 12) { [weak self] in
+            L10n.toggle()
+            self?.go(HomeScreen())
+        }
+        let sound = Glass.button(symbol: save.data.soundOn ? "speaker.wave.2.fill" : "speaker.slash.fill", style: .secondary, fontSize: 13)
         sound.addAction(UIAction { [weak sound] _ in
             Save.shared.data.soundOn.toggle()
             Save.shared.persist()
             Sound.shared.enabled = Save.shared.data.soundOn
             sound?.configuration?.image = UIImage(systemName: Save.shared.data.soundOn ? "speaker.wave.2.fill" : "speaker.slash.fill",
-                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .bold))
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold))
         }, for: .touchUpInside)
-        for v in [record, coins, sound] as [UIView] { ui.addSubview(v) }
+        for v in [record, coins, lang, sound] as [UIView] { ui.addSubview(v) }
 
-        let titlePanel = Glass.panel(radius: 28)
-        let moon = UIImageView(image: UIImage(systemName: "moon.stars.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 26, weight: .bold)))
-        moon.tintColor = .maCoin
-        let title = Glass.label("MOON ACTION", size: 34, weight: .black)
-        let sub = Glass.label("3D CARD BATTLE", size: 13, weight: .heavy, color: UIColor(hex: 0x8FE3FF))
-        let ts = UIStackView(arrangedSubviews: [moon, title, sub])
-        ts.axis = .vertical
-        ts.alignment = .center
-        ts.spacing = 2
-        ts.translatesAutoresizingMaskIntoConstraints = false
-        titlePanel.contentView.addSubview(ts)
-        ui.addSubview(titlePanel)
+        // Title: quiet, wide-tracked typography
+        let title = UILabel()
+        title.attributedText = NSAttributedString(string: "MOON ACTION", attributes: [
+            .font: Glass.font(30, .bold), .foregroundColor: UIColor.white, .kern: 9,
+        ])
+        title.textAlignment = .center
+        title.layer.shadowColor = UIColor.black.cgColor
+        title.layer.shadowOpacity = 0.35
+        title.layer.shadowRadius = 12
+        title.translatesAutoresizingMaskIntoConstraints = false
+        let rule = UIView()
+        rule.backgroundColor = Theme.accent
+        rule.translatesAutoresizingMaskIntoConstraints = false
+        let sub = Glass.caption(L("app.subtitle"), size: 11, color: Theme.text2)
+        for v in [title, rule, sub] as [UIView] { ui.addSubview(v) }
 
-        let battle = Glass.button("Battle", subtitle: "Stage \(save.data.stage)", symbol: "flame.fill",
-                                  style: .prominent, tint: .maRed, fontSize: 24) { [weak self] in self?.go(TeamScreen()) }
-        let summon = Glass.button("Summon", symbol: "sparkles", fontSize: 17) { [weak self] in self?.go(SummonScreen()) }
-        let team = Glass.button("Fighters", symbol: "person.3.fill", fontSize: 17) { [weak self] in self?.go(TeamScreen()) }
-        let help = Glass.button("How to Play", symbol: "questionmark.circle.fill", fontSize: 17) { [weak self] in self?.showHelp() }
-        let row = UIStackView(arrangedSubviews: [summon, team])
+        let battle = Glass.button(L("home.battle"), subtitle: L10n.f("home.stage", save.data.stage), symbol: "play.fill",
+                                  style: .primary, fontSize: 19) { [weak self] in self?.go(TeamScreen()) }
+        let fighters = Glass.button(L("home.fighters"), symbol: "person.2.fill", style: .secondary, fontSize: 15) { [weak self] in
+            self?.go(TeamScreen())
+        }
+        let summon = Glass.button(L("home.summon"), symbol: "sparkles", style: .secondary, fontSize: 15) { [weak self] in
+            self?.go(SummonScreen())
+        }
+        let row = UIStackView(arrangedSubviews: [fighters, summon])
         row.spacing = 10
         row.distribution = .fillEqually
+        let help = Glass.button(L("home.help"), symbol: "questionmark.circle", style: .regular, fontSize: 13) { [weak self] in
+            self?.showHelp()
+        }
         let menu = UIStackView(arrangedSubviews: [battle, row, help])
         menu.axis = .vertical
         menu.spacing = 10
+        menu.setCustomSpacing(16, after: row)
         menu.translatesAutoresizingMaskIntoConstraints = false
         ui.addSubview(menu)
 
-        let footer = Glass.label("Original game · all characters are procedurally generated 3D models",
-                                 size: 10, weight: .medium, color: UIColor(white: 1, alpha: 0.5))
+        let footer = Glass.label(L("home.footer"), size: 9, weight: .regular, color: Theme.text3)
         ui.addSubview(footer)
 
         NSLayoutConstraint.activate([
@@ -94,50 +107,51 @@ final class HomeScreen: Screen {
             record.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8),
             sound.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -16),
             sound.centerYAnchor.constraint(equalTo: record.centerYAnchor),
-            sound.widthAnchor.constraint(equalToConstant: 40),
-            sound.heightAnchor.constraint(equalToConstant: 40),
-            coins.trailingAnchor.constraint(equalTo: sound.leadingAnchor, constant: -8),
+            sound.widthAnchor.constraint(equalToConstant: 36),
+            sound.heightAnchor.constraint(equalToConstant: 36),
+            lang.trailingAnchor.constraint(equalTo: sound.leadingAnchor, constant: -8),
+            lang.centerYAnchor.constraint(equalTo: record.centerYAnchor),
+            lang.heightAnchor.constraint(equalToConstant: 36),
+            coins.leadingAnchor.constraint(equalTo: record.trailingAnchor, constant: 8),
             coins.centerYAnchor.constraint(equalTo: record.centerYAnchor),
 
-            titlePanel.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
-            titlePanel.topAnchor.constraint(equalTo: record.bottomAnchor, constant: 18),
-            ts.leadingAnchor.constraint(equalTo: titlePanel.contentView.leadingAnchor, constant: 28),
-            ts.trailingAnchor.constraint(equalTo: titlePanel.contentView.trailingAnchor, constant: -28),
-            ts.topAnchor.constraint(equalTo: titlePanel.contentView.topAnchor, constant: 12),
-            ts.bottomAnchor.constraint(equalTo: titlePanel.contentView.bottomAnchor, constant: -12),
+            title.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            title.topAnchor.constraint(equalTo: record.bottomAnchor, constant: 30),
+            rule.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            rule.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 10),
+            rule.widthAnchor.constraint(equalToConstant: 28),
+            rule.heightAnchor.constraint(equalToConstant: 2),
+            sub.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            sub.topAnchor.constraint(equalTo: rule.bottomAnchor, constant: 10),
 
-            menu.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 24),
-            menu.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -24),
-            menu.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -12),
-            battle.heightAnchor.constraint(equalToConstant: 66),
-            summon.heightAnchor.constraint(equalToConstant: 50),
-            help.heightAnchor.constraint(equalToConstant: 46),
+            menu.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 28),
+            menu.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -28),
+            menu.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -14),
+            battle.heightAnchor.constraint(equalToConstant: 60),
+            fighters.heightAnchor.constraint(equalToConstant: 48),
+            help.heightAnchor.constraint(equalToConstant: 38),
 
             footer.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
             footer.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -6),
-            footer.widthAnchor.constraint(lessThanOrEqualTo: safe.widthAnchor, constant: -24),
+            footer.widthAnchor.constraint(lessThanOrEqualTo: safe.widthAnchor, constant: -32),
         ])
     }
 
     private func showHelp() {
         helpModal = presentModal(width: 350) { stack in
-            stack.addArrangedSubview(Glass.label("How to Play", size: 24, weight: .heavy, color: .maCoin))
+            stack.addArrangedSubview(Glass.label(L("help.title"), size: 19, weight: .semibold))
             let items: [(String, String)] = [
-                ("rectangle.portrait.on.rectangle.portrait.fill", "Tap cards to fight. Each card costs Energy; used cards are replaced from your deck."),
-                ("hand.raised.fill", "STRIKE (red) — dash in for melee combos."),
-                ("circle.hexagongrid.fill", "BLAST (gold) — fire energy shots. Blasts stop strikers dashing in."),
-                ("sparkles", "SPECIAL (blue) — signature art with a cinematic camera."),
-                ("cross.fill", "EFFECT cards — heal, barrier, power-up, energy or curse."),
-                ("flame.fill", "ULTIMATE — appears when the gold gauge fills."),
-                ("moon.fill", "Collect 7 moon shards by chaining cards to unlock ECLIPSE RUSH."),
-                ("hand.tap.fill", "Tap arena: basic attack · Swipe ←/→: evade · ↑: dash · ↓: step back · Hold: charge"),
+                ("rectangle.portrait.on.rectangle.portrait", "help.1"), ("figure.boxing", "help.2"),
+                ("dot.radiowaves.right", "help.3"), ("sparkles", "help.4"), ("cross", "help.5"), ("flame", "help.6"),
+                ("link", "help.7"), ("wind", "help.8"), ("hand.tap", "help.9"), ("moon", "help.10"),
             ]
-            for (sym, text) in items {
-                let icon = UIImageView(image: UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .bold)))
-                icon.tintColor = UIColor(hex: 0x8FE3FF)
+            for (sym, key) in items {
+                let icon = UIImageView(image: UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+                                        ?? UIImage(systemName: "circle"))
+                icon.tintColor = Theme.accent
                 icon.contentMode = .center
-                icon.widthAnchor.constraint(equalToConstant: 24).isActive = true
-                let l = Glass.label(text, size: 13, weight: .semibold, align: .left)
+                icon.widthAnchor.constraint(equalToConstant: 22).isActive = true
+                let l = Glass.label(L(key), size: 12, weight: .regular, color: Theme.text, align: .left)
                 l.numberOfLines = 3
                 l.adjustsFontSizeToFitWidth = false
                 let row = UIStackView(arrangedSubviews: [icon, l])
@@ -145,10 +159,11 @@ final class HomeScreen: Screen {
                 row.alignment = .center
                 stack.addArrangedSubview(row)
             }
-            let ok = Glass.button("Got it", style: .prominent, tint: .maRed, fontSize: 17) { [weak self] in
+            let ok = Glass.button(L("ok"), style: .primary, fontSize: 15) { [weak self] in
                 self?.dismissModal(self?.helpModal)
             }
-            ok.heightAnchor.constraint(equalToConstant: 46).isActive = true
+            ok.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            stack.setCustomSpacing(18, after: stack.arrangedSubviews.last!)
             stack.addArrangedSubview(ok)
         }
     }

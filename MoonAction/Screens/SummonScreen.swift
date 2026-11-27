@@ -20,8 +20,8 @@ final class SummonScreen: Screen {
         arena.camera.simdPosition = SIMD3(0, 1.8, 7.5)
         arena.camera.simdLook(at: SIMD3(0, 1.1, 0))
 
-        let color = UIColor(hex: 0xB18CFF)
-        for (r, w) in [(Float(1.6), Float(0.09)), (Float(1.9), Float(0.04))] {
+        let color = Theme.accent
+        for (r, w) in [(Float(1.6), Float(0.035)), (Float(1.85), Float(0.012))] {
             let ring = SCNNode(geometry: SCNTorus(ringRadius: CGFloat(r), pipeRadius: CGFloat(w)))
             ring.geometry?.materials = [Toon.energy(color)]
             ring.simdEulerAngles = SIMD3(.pi / 2, 0, 0)
@@ -53,32 +53,32 @@ final class SummonScreen: Screen {
     }
 
     private func buildUI() {
-        backBtn = Glass.button(symbol: "chevron.left", fontSize: 16) { [weak self] in
+        backBtn = Glass.button(symbol: "chevron.left", style: .secondary, fontSize: 14) { [weak self] in
             guard let self, !self.busy else { return }
             self.go(HomeScreen())
         }
         ui.addSubview(backBtn)
-        let head = header("Summon", "★★ 75%  ·  ★★★ 25%  ·  duplicates +\(Save.duplicateXP) XP", tint: UIColor.maPurple.withAlphaComponent(0.3))
+        let head = header(L("summon.title"), L10n.f("summon.rates", Save.duplicateXP))
         ui.addSubview(head)
-        let (coins, label) = chip(symbol: "moon.stars.fill", text: "", tint: .maCoin)
+        let (coins, label) = chip(symbol: "moon.stars.fill", text: "", tint: Theme.accent)
         coinLabel = label
         ui.addSubview(coins)
-        summonBtn = Glass.button("Summon ×1", subtitle: "\(Save.summonCost) moon coins", symbol: "sparkles",
-                                 style: .prominent, tint: .maPurple, fontSize: 22) { [weak self] in self?.summon() }
+        summonBtn = Glass.button(L("summon.button"), subtitle: L10n.f("summon.cost", Save.summonCost), symbol: "sparkles",
+                                 style: .primary, fontSize: 18) { [weak self] in self?.summon() }
         ui.addSubview(summonBtn)
         NSLayoutConstraint.activate([
             backBtn.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 14),
             backBtn.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8),
-            backBtn.widthAnchor.constraint(equalToConstant: 44),
-            backBtn.heightAnchor.constraint(equalToConstant: 44),
+            backBtn.widthAnchor.constraint(equalToConstant: 40),
+            backBtn.heightAnchor.constraint(equalToConstant: 40),
             head.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
-            head.topAnchor.constraint(equalTo: backBtn.bottomAnchor, constant: 10),
+            head.topAnchor.constraint(equalTo: backBtn.bottomAnchor, constant: 12),
             coins.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -14),
             coins.centerYAnchor.constraint(equalTo: backBtn.centerYAnchor),
             summonBtn.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 30),
             summonBtn.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -30),
             summonBtn.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -12),
-            summonBtn.heightAnchor.constraint(equalToConstant: 64),
+            summonBtn.heightAnchor.constraint(equalToConstant: 58),
         ])
     }
 
@@ -115,9 +115,9 @@ final class SummonScreen: Screen {
     private func reveal(_ def: FighterDef, isNew: Bool) {
         Sound.play(def.rarity == 3 ? .ultimate : .explode)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        SCNNode.emit(Toon.burst(def.look.aura, count: 160, speed: 10, size: 0.5, life: 0.7), at: SIMD3(0, 1.6, 0), in: arena.world)
+        SCNNode.emit(Toon.burst(def.look.aura, count: 120, speed: 8, size: 0.35, life: 0.6), at: SIMD3(0, 1.6, 0), in: arena.world)
         let flash = UIView(frame: ui.bounds)
-        flash.backgroundColor = def.look.aura.lighter(0.5)
+        flash.backgroundColor = UIColor.white.withAlphaComponent(0.7)
         flash.isUserInteractionEnabled = false
         ui.addSubview(flash)
         UIView.animate(withDuration: 0.6, animations: { flash.alpha = 0 }) { _ in flash.removeFromSuperview() }
@@ -130,15 +130,15 @@ final class SummonScreen: Screen {
         revealed = m
         realDelay(1.5) { m.setAura(1) }
 
-        let panel = Glass.panel(radius: 26, tint: def.look.aura.withAlphaComponent(0.3))
-        let stars = Glass.label(String(repeating: "★", count: def.rarity), size: 22, weight: .black,
-                                color: def.rarity == 3 ? .maCoin : UIColor(hex: 0x8FE3FF))
-        let name = Glass.label(def.name, size: 28, weight: .black)
-        let title = Glass.label(def.title, size: 15, weight: .bold, color: def.look.aura.lighter(0.4))
-        let result = Glass.label(isNew ? "New fighter unlocked!" : "+\(Save.duplicateXP) XP", size: 17, weight: .heavy,
-                                 color: isNew ? UIColor(hex: 0x7CFF8A) : .maCoin)
-        let moves = Glass.label("Special · \(def.specialName)   Ultimate · \(def.ultimateName)", size: 12, weight: .semibold,
-                                color: UIColor(white: 1, alpha: 0.8))
+        let panel = Glass.panel(radius: 22)
+        let stars = Glass.label(String(repeating: "★", count: def.rarity), size: 14, weight: .semibold,
+                                color: def.rarity == 3 ? Theme.accent : Theme.text2)
+        let name = Glass.label(def.name.s, size: 24, weight: .bold)
+        let title = Glass.label(def.title.s + "  ·  " + def.speed.label, size: 12, weight: .medium, color: Theme.text2)
+        let result = Glass.caption(isNew ? L("summon.new") : L10n.f("summon.dup", Save.duplicateXP), size: 11,
+                                   color: isNew ? Theme.hp : Theme.accent)
+        let moves = Glass.label(L10n.f("summon.moves", def.specialName.s, def.ultimateName.s), size: 11, weight: .regular,
+                                color: Theme.text2)
         let st = UIStackView(arrangedSubviews: [stars, name, title, result, moves])
         st.axis = .vertical
         st.spacing = 3

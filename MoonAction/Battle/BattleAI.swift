@@ -31,7 +31,8 @@ extension BattleScreen {
 
         // Chain a follow-up card off the previous one.
         if canChain(s) {
-            let attacks = affordable.filter { s.hand[$0]?.kind == .strike || s.hand[$0]?.kind == .blast }
+            let launched = now < o.current.launchedUntil
+            let attacks = affordable.filter { s.hand[$0]?.kind == .strike || (!launched && s.hand[$0]?.kind == .blast) }
             if let pick = attacks.randomElement(), chance(s.isPlayer ? 0.6 : 0.35 + Double(stage) * 0.02) {
                 playCard(s, pick)
                 aiNext[id] = now + 0.25

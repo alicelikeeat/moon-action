@@ -23,6 +23,7 @@ final class BattleScreen: Screen {
     var timeScale: Double = 1
     var hitStop: Double = 0
     var hud: BattleHUD!
+    var startZone: RangeZone = .mid
     var fxRoot = SCNNode()
 
     // Camera
@@ -62,8 +63,10 @@ final class BattleScreen: Screen {
         let et = enemyIDs.map { Combatant(def: Roster.byID($0), level: enemyLevel) }
         player = Side(isPlayer: true, team: pt)
         enemy = Side(isPlayer: false, team: et)
-        place(player.current, at: SIMD2(0, -3.6))
-        place(enemy.current, at: SIMD2(0, 3.6))
+        startZone = Demo.mode != nil ? .mid : RangeZone(rawValue: Int.random(in: 0...2)) ?? .mid
+        let d = Tune.startDistances[startZone.rawValue]
+        place(player.current, at: SIMD2(0, -d / 2))
+        place(enemy.current, at: SIMD2(0, d / 2))
         fillHand(player)
         fillHand(enemy)
         updateFacing()
@@ -108,10 +111,11 @@ final class BattleScreen: Screen {
 
     private func intro() {
         Sound.play(.charge)
-        hud.banner("READY", color: .white, big: true, duration: 0.9)
+        hud.banner(L("battle.ready"), color: .white, big: true, duration: 0.9)
+        hud.rangeStart(startZone)
         timeline.after(1.0) { [weak self] in
             guard let self else { return }
-            self.hud.banner("FIGHT!", color: UIColor(hex: 0xFF7A45), big: true, duration: 0.7)
+            self.hud.banner(L("battle.fight"), color: Theme.accent, big: true, duration: 0.7)
             Sound.play(.heavy)
             Haptics.hit(true)
             self.started = true
@@ -267,9 +271,9 @@ final class BattleScreen: Screen {
             let f = SIMD3(f2.x, 0, f2.y)
             let right = SIMD3(-f2.y, 0, f2.x)
             let d = dist(p, e)
-            let back: Float = 3.1 + max(0, (3 - d)) * 0.3
-            targetPos = p.world3 - f * back + right * 0.55 + SIMD3(0, 2.05, 0)
-            targetLook = p.world3 + f * max(3.5, d * 0.85) + SIMD3(0, 1.25, 0)
+            let back: Float = 4.4 + max(0, (3 - d)) * 0.35
+            targetPos = p.world3 - f * back + right * 0.75 + SIMD3(0, 2.45, 0)
+            targetLook = p.world3 + f * max(3.2, d * 0.7) + SIMD3(0, 1.15, 0)
         }
         camPos += (targetPos - camPos) * k
         camLook += (targetLook - camLook) * k
@@ -281,7 +285,7 @@ final class BattleScreen: Screen {
         cam.simdPosition = p
         cam.simdLook(at: camLook)
         fovKick *= max(0, 1 - dt * 8)
-        cam.camera?.fieldOfView = CGFloat(58 + fovKick)
+        cam.camera?.fieldOfView = CGFloat(54 + fovKick)
     }
 
     var winnerModel: FighterModel?

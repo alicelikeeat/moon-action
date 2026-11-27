@@ -126,8 +126,8 @@ enum Toon {
         p.particleVelocityVariation = 0.6
         p.emittingDirection = SCNVector3(0, 1, 0)
         p.spreadingAngle = 12
-        p.particleSize = 0.32
-        p.particleSizeVariation = 0.15
+        p.particleSize = 0.2
+        p.particleSizeVariation = 0.1
         p.particleColor = color
         p.particleColorVariation = SCNVector4(0.02, 0.05, 0.1, 0)
         p.blendMode = .additive

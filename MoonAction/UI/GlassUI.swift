@@ -5,9 +5,29 @@ import UIKit
 /// `.glass()` / `.prominentGlass()` button configurations. Older systems fall
 /// back to the closest native material (blur) so the app still runs on iOS 15+.
 enum GlassStyle {
-    case regular
-    case prominent
+    case regular     // clear glass, white content
+    case prominent   // glass tinted with the button's tint color
     case clear
+    case primary     // gold accent, dark content
+    case secondary   // dark smoked glass, white content
+}
+
+/// Design tokens for a calm, minimal look.
+enum Theme {
+    static let accent = UIColor(hex: 0xF2C46D)          // moon gold
+    static let ink = UIColor(hex: 0x14161F)             // dark content on gold
+    static let text = UIColor.white
+    static let text2 = UIColor(white: 1, alpha: 0.62)
+    static let text3 = UIColor(white: 1, alpha: 0.38)
+    static let smoke = UIColor(white: 0.04, alpha: 0.42) // glass tint
+    static let hp = UIColor(hex: 0x7EE2A8)
+    static let hpEnemy = UIColor(hex: 0xFF7A70)
+    static let energy = UIColor(hex: 0x7FD8FF)
+    static let strike = UIColor(hex: 0xFF6B5B)
+    static let blast = UIColor(hex: 0xF2C46D)
+    static let special = UIColor(hex: 0x6FC3FF)
+    static let ultimate = UIColor(hex: 0xC49BFF)
+    static let effect = UIColor(hex: 0x7EE2A8)
 }
 
 @MainActor
@@ -19,12 +39,14 @@ enum Glass {
         return false
     }
 
-    static func font(_ size: CGFloat, _ weight: UIFont.Weight = .bold) -> UIFont {
+    static func font(_ size: CGFloat, _ weight: UIFont.Weight = .semibold, rounded: Bool = false) -> UIFont {
         let base = UIFont.systemFont(ofSize: size, weight: weight)
-        if let d = base.fontDescriptor.withDesign(.rounded) {
-            return UIFont(descriptor: d, size: size)
-        }
+        if rounded, let d = base.fontDescriptor.withDesign(.rounded) { return UIFont(descriptor: d, size: size) }
         return base
+    }
+
+    static func mono(_ size: CGFloat, _ weight: UIFont.Weight = .semibold) -> UIFont {
+        UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
     }
 
     static func configuration(_ style: GlassStyle, tint: UIColor?) -> UIButton.Configuration {
@@ -33,43 +55,43 @@ enum Glass {
             var c: UIButton.Configuration
             switch style {
             case .regular: c = .glass()
-            case .prominent: c = .prominentGlass()
             case .clear: c = .clearGlass()
+            case .prominent, .primary, .secondary: c = .prominentGlass()
             }
-            c.baseForegroundColor = .white
+            c.baseForegroundColor = style == .primary ? Theme.ink : .white
             c.cornerStyle = .capsule
             return c
         }
         #endif
         var c = UIButton.Configuration.filled()
-        c.baseForegroundColor = .white
+        c.baseForegroundColor = style == .primary ? Theme.ink : .white
         switch style {
-        case .prominent:
-            c.baseBackgroundColor = nil // follows the button's tintColor
-        case .regular, .clear:
-            c.baseBackgroundColor = UIColor(white: 1, alpha: 0.12)
+        case .prominent, .primary:
+            c.baseBackgroundColor = nil // follows tintColor
+        case .regular, .clear, .secondary:
+            c.baseBackgroundColor = UIColor(white: 0.05, alpha: 0.35)
             c.background.visualEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
         }
-        c.background.strokeColor = UIColor(white: 1, alpha: 0.35)
-        c.background.strokeWidth = 1
+        c.background.strokeColor = UIColor(white: 1, alpha: 0.18)
+        c.background.strokeWidth = 0.5
         c.cornerStyle = .capsule
         return c
     }
 
     /// A glass button. `symbol` is an SF Symbol name.
     static func button(_ title: String? = nil, subtitle: String? = nil, symbol: String? = nil,
-                       style: GlassStyle = .regular, tint: UIColor? = nil, fontSize: CGFloat = 17,
+                       style: GlassStyle = .regular, tint: UIColor? = nil, fontSize: CGFloat = 16,
                        action: (() -> Void)? = nil) -> UIButton {
         var c = configuration(style, tint: tint)
         c.title = title
         c.subtitle = subtitle
-        let f = font(fontSize, .heavy)
+        let f = font(fontSize, .semibold)
         c.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
             var a = a
             a.font = f
             return a
         }
-        let sf = font(max(10, fontSize * 0.62), .semibold)
+        let sf = font(max(10, fontSize * 0.68), .medium)
         c.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
             var a = a
             a.font = sf
@@ -77,15 +99,20 @@ enum Glass {
         }
         c.titleAlignment = .center
         if let symbol {
-            c.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: fontSize * 0.95, weight: .bold))
-            c.imagePadding = title == nil ? 0 : 6
+            c.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: fontSize * 0.9, weight: .semibold))
+            c.imagePadding = title == nil ? 0 : 7
         }
-        c.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
+        c.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
         let b = UIButton(configuration: c)
-        if let tint { b.tintColor = tint }
+        switch style {
+        case .primary: b.tintColor = tint ?? Theme.accent
+        case .secondary: b.tintColor = tint ?? Theme.smoke
+        default: if let tint { b.tintColor = tint }
+        }
         if let action {
             b.addAction(UIAction { _ in
                 Sound.play(.ui)
+                UISelectionFeedbackGenerator().selectionChanged()
                 action()
             }, for: .touchUpInside)
         }
@@ -99,22 +126,23 @@ enum Glass {
         b.addAction(UIAction { _ in up() }, for: [.touchUpInside, .touchUpOutside, .touchCancel])
     }
 
-    /// A glass surface. Put content inside `contentView`.
+    /// A smoked glass surface (dark tint for legibility). Put content inside `contentView`.
     static func panel(radius: CGFloat, tint: UIColor? = nil, interactive: Bool = false) -> UIVisualEffectView {
+        let t = tint ?? Theme.smoke
         let v: UIVisualEffectView
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             let e = UIGlassEffect(style: .regular)
             e.isInteractive = interactive
-            e.tintColor = tint
+            e.tintColor = t
             v = UIVisualEffectView(effect: e)
         } else {
             v = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-            v.contentView.backgroundColor = tint?.withAlphaComponent(0.25)
+            v.contentView.backgroundColor = t
         }
         #else
         v = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        v.contentView.backgroundColor = tint?.withAlphaComponent(0.25)
+        v.contentView.backgroundColor = t
         #endif
         v.layer.cornerRadius = radius
         v.layer.cornerCurve = .continuous
@@ -123,17 +151,28 @@ enum Glass {
         return v
     }
 
-    static func label(_ text: String = "", size: CGFloat, weight: UIFont.Weight = .bold,
-                      color: UIColor = .white, align: NSTextAlignment = .center) -> UILabel {
+    static func label(_ text: String = "", size: CGFloat, weight: UIFont.Weight = .semibold,
+                      color: UIColor = .white, align: NSTextAlignment = .center, mono: Bool = false) -> UILabel {
         let l = UILabel()
         l.text = text
-        l.font = font(size, weight)
+        l.font = mono ? Glass.mono(size, weight) : font(size, weight)
         l.textColor = color
         l.textAlignment = align
         l.adjustsFontSizeToFitWidth = true
         l.minimumScaleFactor = 0.6
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
+    }
+
+    /// Small uppercase caption with letter spacing.
+    static func caption(_ text: String, size: CGFloat = 10, color: UIColor = Theme.text2) -> UILabel {
+        let l = label("", size: size, weight: .semibold, color: color)
+        setCaption(l, text)
+        return l
+    }
+
+    static func setCaption(_ l: UILabel, _ text: String) {
+        l.attributedText = NSAttributedString(string: L10n.isZH ? text : text.uppercased(), attributes: [.kern: L10n.isZH ? 1.0 : 1.6])
     }
 
     static func size(_ v: UIView, _ w: CGFloat, _ h: CGFloat) {
@@ -182,10 +221,10 @@ final class MeterView: UIView {
     init(color: UIColor, fromRight: Bool = false) {
         self.fromRight = fromRight
         super.init(frame: .zero)
-        backgroundColor = UIColor(white: 0, alpha: 0.35)
+        backgroundColor = UIColor(white: 1, alpha: 0.12)
         layer.cornerCurve = .continuous
         clipsToBounds = true
-        trail.backgroundColor = UIColor(white: 1, alpha: 0.8)
+        trail.backgroundColor = UIColor(white: 1, alpha: 0.55)
         fill.backgroundColor = color
         addSubview(trail)
         addSubview(fill)

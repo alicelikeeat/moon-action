@@ -50,8 +50,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0.${{ github.run_number }}
-          name: Moon Action v2.0.${{ github.run_number }} (unsigned IPA)
+          tag_name: v3.0.${{ github.run_number }}
+          name: Moon Action v3.0.${{ github.run_number }} (unsigned IPA)
           target_commitish: ${{ github.sha }}
           files: MoonAction-unsigned.ipa
           body: |
@@ -98,8 +98,8 @@ jobs:
           log "install"
           wd 120 xcrun simctl install "$UDID" simbuild/Debug-iphonesimulator/MoonAction.app
           shot() { log "shot $1"; wd 30 xcrun simctl io "$UDID" screenshot "shots/$1.png" || true; }
-          run() { log "launch $1"; wd 60 xcrun simctl launch --terminate-running-process "$UDID" com.moonaction.game -demo "$1" || true; }
-          run home;     sleep 8;  shot 1-home
+          run() { log "launch $1"; wd 60 xcrun simctl launch --terminate-running-process "$UDID" com.moonaction.game -demo "$1" -lang zh || true; }
+          run home;     sleep 10; shot 1-home; sleep 2; shot 1b-home
           run team;     sleep 6;  shot 2-team
           run summon;   sleep 6;  shot 3-summon
           run battle;   sleep 5;  shot 4-battle-start; sleep 3; shot 5-battle-a; sleep 3; shot 6-battle-b; sleep 4; shot 7-battle-c
@@ -121,5 +121,5 @@ jobs:
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0.${{ github.run_number }}
+          tag_name: v3.0.${{ github.run_number }}
           files: shots/*.png

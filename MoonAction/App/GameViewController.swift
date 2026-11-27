@@ -36,6 +36,8 @@ final class GameViewController: UIViewController {
         guard !started else { return }
         started = true
         Sound.shared.enabled = Save.shared.data.soundOn
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-lang"), i + 1 < args.count { L10n.setting = args[i + 1] }
         let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
         link.add(to: .main, forMode: .common)
         self.link = link

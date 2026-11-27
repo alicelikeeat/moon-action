@@ -60,7 +60,7 @@ extension BattleScreen {
     }
 
     func showEvade(_ c: Combatant) {
-        popup("EVADE", at: c.chest + SIMD3(0, 0.9, 0), color: UIColor(hex: 0x8FE3FF), size: 22)
+        popup(L("battle.evade"), at: c.chest + SIMD3(0, 0.9, 0), color: Theme.energy, size: 18)
     }
 
     /// Floating text anchored to a 3D point.
@@ -70,7 +70,7 @@ extension BattleScreen {
         guard sp.z > 0 && sp.z < 1 else { return }
         let l = UILabel()
         l.text = text
-        l.font = Glass.font(size, .black)
+        l.font = Glass.mono(size, .bold)
         l.textColor = color
         l.layer.shadowColor = UIColor.black.cgColor
         l.layer.shadowOpacity = 0.9

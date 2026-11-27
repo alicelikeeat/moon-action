@@ -61,16 +61,19 @@ final class ResultScreen: Screen {
 
     private func buildUI() {
         let save = Save.shared
-        let head = Glass.panel(radius: 28, tint: (won ? UIColor.maGold : UIColor.gray).withAlphaComponent(0.25))
-        let title = Glass.label(won ? "Victory" : "Defeat", size: 40, weight: .black, color: won ? .maCoin : UIColor(hex: 0xC4CBE6))
-        let sub = Glass.label(won ? "Stage \(stage) cleared · next: Stage \(stage + 1)" : "Train up and retry Stage \(stage)",
-                              size: 14, weight: .semibold, color: UIColor(white: 1, alpha: 0.8))
+        let head = Glass.panel(radius: 24)
+        let title = UILabel()
+        title.attributedText = NSAttributedString(string: L(won ? "result.victory" : "result.defeat").uppercased(), attributes: [
+            .font: Glass.font(28, .bold), .foregroundColor: won ? Theme.accent : Theme.text2, .kern: L10n.isZH ? 6 : 9,
+        ])
+        let sub = Glass.label(won ? L10n.f("result.cleared", stage, stage + 1) : L10n.f("result.retry", stage),
+                              size: 12, weight: .medium, color: Theme.text2)
         let reward = UIStackView()
         reward.spacing = 18
-        for (sym, text, tint) in [("moon.stars.fill", "+\(coins)", UIColor.maCoin), ("star.fill", "+\(xp) XP", UIColor(hex: 0x8FE3FF))] {
-            let icon = UIImageView(image: UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .bold)))
-            icon.tintColor = tint
-            let l = Glass.label(text, size: 19, weight: .heavy)
+        for (sym, text) in [("moon.stars.fill", "+\(coins)"), ("star.fill", "+\(xp) XP")] {
+            let icon = UIImageView(image: UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)))
+            icon.tintColor = Theme.accent
+            let l = Glass.label(text, size: 15, weight: .semibold, mono: true)
             let r = UIStackView(arrangedSubviews: [icon, l])
             r.spacing = 6
             r.alignment = .center
@@ -79,7 +82,8 @@ final class ResultScreen: Screen {
         let hs = UIStackView(arrangedSubviews: [title, sub, reward])
         hs.axis = .vertical
         hs.alignment = .center
-        hs.spacing = 4
+        hs.spacing = 6
+        hs.setCustomSpacing(12, after: sub)
         hs.translatesAutoresizingMaskIntoConstraints = false
         head.contentView.addSubview(hs)
         ui.addSubview(head)
@@ -91,46 +95,46 @@ final class ResultScreen: Screen {
         for (i, id) in teamIDs.enumerated() {
             let def = Roster.byID(id)
             let info = save.levelInfo(id)
-            let card = Glass.panel(radius: 16, tint: def.look.aura.withAlphaComponent(0.2))
-            let name = Glass.label(def.name.components(separatedBy: " ").first ?? def.name, size: 13, weight: .heavy)
+            let card = Glass.panel(radius: 16)
+            let name = Glass.label(def.shortName, size: 12, weight: .semibold)
             let leveled = info.level > before[i]
-            let lvl = Glass.label(leveled ? "Lv \(info.level) ▲" : "Lv \(info.level)", size: 12, weight: .bold,
-                                  color: leveled ? UIColor(hex: 0x7CFF8A) : def.look.aura.lighter(0.4))
-            let meter = MeterView(color: def.look.aura)
-            meter.heightAnchor.constraint(equalToConstant: 5).isActive = true
+            let lvl = Glass.label(leveled ? "Lv \(info.level) ↑" : "Lv \(info.level)", size: 11, weight: .medium,
+                                  color: leveled ? Theme.hp : Theme.text2, mono: true)
+            let meter = MeterView(color: Theme.accent)
+            meter.heightAnchor.constraint(equalToConstant: 3).isActive = true
             meter.set(CGFloat(info.into) / CGFloat(info.need), immediate: true)
             let st = UIStackView(arrangedSubviews: [name, lvl, meter])
             st.axis = .vertical
-            st.spacing = 3
+            st.spacing = 4
             st.translatesAutoresizingMaskIntoConstraints = false
             card.contentView.addSubview(st)
             NSLayoutConstraint.activate([
-                st.leadingAnchor.constraint(equalTo: card.contentView.leadingAnchor, constant: 10),
-                st.trailingAnchor.constraint(equalTo: card.contentView.trailingAnchor, constant: -10),
-                st.topAnchor.constraint(equalTo: card.contentView.topAnchor, constant: 8),
-                st.bottomAnchor.constraint(equalTo: card.contentView.bottomAnchor, constant: -9),
+                st.leadingAnchor.constraint(equalTo: card.contentView.leadingAnchor, constant: 12),
+                st.trailingAnchor.constraint(equalTo: card.contentView.trailingAnchor, constant: -12),
+                st.topAnchor.constraint(equalTo: card.contentView.topAnchor, constant: 10),
+                st.bottomAnchor.constraint(equalTo: card.contentView.bottomAnchor, constant: -11),
             ])
             cards.addArrangedSubview(card)
         }
         ui.addSubview(cards)
-        let cont = Glass.button("Continue", symbol: "arrow.right", style: .prominent, tint: .maRed, fontSize: 20) { [weak self] in
+        let cont = Glass.button(L("result.continue"), symbol: "arrow.right", style: .primary, fontSize: 17) { [weak self] in
             self?.go(HomeScreen())
         }
         ui.addSubview(cont)
         NSLayoutConstraint.activate([
             head.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
-            head.topAnchor.constraint(equalTo: safe.topAnchor, constant: 12),
-            hs.leadingAnchor.constraint(equalTo: head.contentView.leadingAnchor, constant: 26),
-            hs.trailingAnchor.constraint(equalTo: head.contentView.trailingAnchor, constant: -26),
-            hs.topAnchor.constraint(equalTo: head.contentView.topAnchor, constant: 10),
-            hs.bottomAnchor.constraint(equalTo: head.contentView.bottomAnchor, constant: -12),
-            cards.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 14),
-            cards.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -14),
+            head.topAnchor.constraint(equalTo: safe.topAnchor, constant: 14),
+            hs.leadingAnchor.constraint(equalTo: head.contentView.leadingAnchor, constant: 28),
+            hs.trailingAnchor.constraint(equalTo: head.contentView.trailingAnchor, constant: -28),
+            hs.topAnchor.constraint(equalTo: head.contentView.topAnchor, constant: 16),
+            hs.bottomAnchor.constraint(equalTo: head.contentView.bottomAnchor, constant: -16),
+            cards.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
+            cards.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -16),
             cards.bottomAnchor.constraint(equalTo: cont.topAnchor, constant: -12),
-            cont.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 30),
-            cont.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -30),
+            cont.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 28),
+            cont.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -28),
             cont.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -10),
-            cont.heightAnchor.constraint(equalToConstant: 56),
+            cont.heightAnchor.constraint(equalToConstant: 54),
         ])
     }
 }
