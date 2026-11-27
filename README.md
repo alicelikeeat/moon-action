@@ -72,8 +72,12 @@ automatically onto the game skeleton, so every move works on the imported model.
 
 ## Versioning
 
-- `MARKETING_VERSION` in `project.yml` is the single source of the version (e.g. `3.1.0`).
-- CI sets the build number (`CFBundleVersion`) to the workflow run number.
-- After building, CI reads both values back from the IPA's `Info.plist`, fails on any mismatch, and only then
-  names the file `MoonAction-<version>-build<build>-unsigned.ipa` and the release tag `v<version>-build<build>`.
+- `MARKETING_VERSION` in `project.yml` sets **MAJOR.MINOR** (currently `3.1`).
+- CI sets **PATCH** and the build number to the workflow run number, so every IPA has a unique visible
+  version, e.g. `3.1.13`. Signing/installer apps that only show `CFBundleShortVersionString` can tell
+  builds apart.
+- After building, CI reads `CFBundleShortVersionString` / `CFBundleVersion` back from the IPA's
+  `Info.plist`, fails on any mismatch, and only then names the file `MoonAction-<version>-unsigned.ipa`
+  and the release tag `v<version>`.
 - The home screen footer shows the installed `v<version> (<build>)`.
+- IPAs published before 3.1.x (tags v1.0.x–v3.0.x) carry the old hard-coded versions (1.0.0 / 2.0.0 / 3.0.0).

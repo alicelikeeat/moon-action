@@ -28,10 +28,12 @@ jobs:
 
       - name: Version (single source of truth)
         run: |
-          # Marketing version lives in project.yml; build number = CI run number.
-          APP_VERSION=$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([0-9]+(\.[0-9]+){1,2})"?.*/\1/p' project.yml | head -1)
-          test -n "$APP_VERSION" || { echo "MARKETING_VERSION not found"; exit 1; }
+          # project.yml MARKETING_VERSION supplies MAJOR.MINOR; CI assigns PATCH = run number,
+          # so every IPA shows a unique version in installers/signers (they only show the version).
+          BASE=$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([0-9]+\.[0-9]+).*/\1/p' project.yml | head -1)
+          test -n "$BASE" || { echo "MARKETING_VERSION not found"; exit 1; }
           APP_BUILD=${{ github.run_number }}
+          APP_VERSION="$BASE.$APP_BUILD"
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           echo "APP_BUILD=$APP_BUILD" >> "$GITHUB_ENV"
           echo "Building Moon Action $APP_VERSION ($APP_BUILD)"
@@ -62,7 +64,7 @@ jobs:
           if [ "$V" != "$APP_VERSION" ] || [ "$B" != "$APP_BUILD" ]; then
             echo "::error::Version mismatch: built $V ($B), expected $APP_VERSION ($APP_BUILD)"; exit 1
           fi
-          IPA_NAME="MoonAction-$V-build$B-unsigned.ipa"
+          IPA_NAME="MoonAction-$V-unsigned.ipa"
           zip -qry "$IPA_NAME" Payload
           echo "IPA_NAME=$IPA_NAME" >> "$GITHUB_ENV"
           ls -lh "$IPA_NAME"
@@ -76,8 +78,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.APP_VERSION }}-build${{ env.APP_BUILD }}
-          name: Moon Action ${{ env.APP_VERSION }} (build ${{ env.APP_BUILD }}) · unsigned IPA
+          tag_name: v${{ env.APP_VERSION }}
+          name: Moon Action ${{ env.APP_VERSION }} · unsigned IPA
           target_commitish: ${{ github.sha }}
           files: ${{ env.IPA_NAME }}
           body: |
@@ -160,5 +162,5 @@ jobs:
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.APP_VERSION }}-build${{ env.APP_BUILD }}
+          tag_name: v${{ env.APP_VERSION }}
           files: shots/*.png
