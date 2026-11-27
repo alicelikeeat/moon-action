@@ -13,6 +13,10 @@ enum Portraits {
 
     enum Framing { case bust, body }
 
+    static func invalidate(_ id: String) {
+        cache = cache.filter { !$0.key.hasPrefix(id + "-") }
+    }
+
     static func image(_ def: FighterDef, _ framing: Framing, size: CGSize, background: UIColor? = nil) -> UIImage? {
         let key = "\(def.id)-\(framing)-\(Int(size.width))x\(Int(size.height))-\(background == nil)"
         if let c = cache[key] { return c }
@@ -22,7 +26,10 @@ enum Portraits {
         let model = FighterModel(def: def)
         model.body.removeAllActions()
         model.setAura(0)
+        model.syncPose()
         scene.rootNode.addChildNode(model.root)
+        scene.lightingEnvironment.contents = Toon.gradientImage(top: UIColor(white: 0.95, alpha: 1), bottom: UIColor(white: 0.35, alpha: 1))
+        scene.lightingEnvironment.intensity = 1.2
         let h = def.look.height
         let cam = SCNNode()
         cam.camera = SCNCamera()

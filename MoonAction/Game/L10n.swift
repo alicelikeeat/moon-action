@@ -111,6 +111,14 @@ enum L10n {
         "kind.energy": ("ENERGY", "充能"),
         "kind.curse": ("CURSE", "诅咒"),
         "lang": ("中文", "English"),
+        "model.import": ("Import 3D Model", "导入3D模型"),
+        "model.replace": ("Replace Model", "更换模型"),
+        "model.remove": ("Remove", "移除"),
+        "model.custom": ("Custom model · %d/10 bones mapped", "自定义模型 · 已识别骨骼 %d/10"),
+        "model.bundled": ("Bundled model · %d/10 bones mapped", "内置模型 · 已识别骨骼 %d/10"),
+        "model.procedural": ("Procedural model", "程序化模型"),
+        "model.failed": ("Import failed", "导入失败"),
+        "model.hint": (".usdz / .glb · humanoid rig (Mixamo, AccuRIG…)", ".usdz / .glb · 人形骨骼（Mixamo、AccuRIG 等）"),
     ]
 
     static func s(_ key: String) -> String {

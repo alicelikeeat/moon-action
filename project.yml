@@ -3,12 +3,32 @@ options:
   bundleIdPrefix: com.moonaction
   deploymentTarget:
     iOS: "15.0"
+packages:
+  GLTFKit2:
+    url: https://github.com/warrenm/GLTFKit2
+    exactVersion: 0.5.9
+schemes:
+  MoonAction:
+    build:
+      targets:
+        MoonAction: all
+    run:
+      config: Debug
+    archive:
+      config: Release
 targets:
   MoonAction:
     type: application
     platform: iOS
     sources:
       - path: MoonAction
+        excludes:
+          - "Models/**"
+      - path: MoonAction/Models
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: GLTFKit2
     settings:
       base:
         PRODUCT_NAME: MoonAction

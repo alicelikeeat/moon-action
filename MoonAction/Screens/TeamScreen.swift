@@ -15,6 +15,10 @@ final class TeamScreen: Screen {
     private let infoSpeed = Glass.label("", size: 11, weight: .medium, color: Theme.energy, align: .left)
     private let infoStats = Glass.label("", size: 11, weight: .medium, color: Theme.text2, align: .left, mono: true)
     private let deckRow = UIStackView()
+    private let modelInfo = Glass.label("", size: 10, weight: .medium, color: Theme.text3, align: .left)
+    private var importBtn: UIButton!
+    private var removeBtn: UIButton!
+    private var focusedID = "kai"
     private var enemyIDs: [String] = []
     private var t: Double = 0
 
@@ -47,6 +51,7 @@ final class TeamScreen: Screen {
     }
 
     private func focus(_ id: String) {
+        focusedID = id
         preview?.root.removeFromParentNode()
         let m = FighterModel(def: Roster.byID(id))
         m.root.simdPosition = SIMD3(0, 0.18, 0)
@@ -70,6 +75,30 @@ final class TeamScreen: Screen {
             deckRow.addArrangedSubview(iv)
         }
         for (k, tile) in tiles { tile.setFocused(k == id) }
+        let has = ModelLibrary.hasModel(id)
+        if let n = m.importedBones {
+            modelInfo.text = L10n.f(ModelLibrary.isUserImported(id) ? "model.custom" : "model.bundled", n)
+        } else {
+            modelInfo.text = has ? L("model.failed") : L("model.procedural") + " · " + L("model.hint")
+        }
+        importBtn?.configuration?.title = L(ModelLibrary.isUserImported(id) ? "model.replace" : "model.import")
+        removeBtn?.isHidden = !ModelLibrary.isUserImported(id)
+    }
+
+    private func importModel() {
+        guard let vc = host else { return }
+        let id = focusedID
+        ModelPicker.present(from: vc, for: id) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                Sound.play(.ultimate)
+                self.tiles[id]?.refreshImage()
+                self.focus(id)
+            case .failure(let e):
+                self.modelInfo.text = L("model.failed") + ": " + e.localizedDescription
+            }
+        }
     }
 
     private func buildUI() {
@@ -82,10 +111,26 @@ final class TeamScreen: Screen {
         deckRow.spacing = 4
         let speedRow = UIStackView(arrangedSubviews: [infoSpeed, infoStats])
         speedRow.spacing = 12
-        let infoStack = UIStackView(arrangedSubviews: [infoName, infoTitle, speedRow, deckRow])
+        importBtn = Glass.button(L("model.import"), symbol: "cube.transparent", style: .secondary, fontSize: 11) { [weak self] in
+            self?.importModel()
+        }
+        importBtn.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
+        removeBtn = Glass.button(L("model.remove"), symbol: "trash", style: .secondary, fontSize: 11) { [weak self] in
+            guard let self else { return }
+            ModelLibrary.remove(self.focusedID)
+            self.tiles[self.focusedID]?.refreshImage()
+            self.focus(self.focusedID)
+        }
+        removeBtn.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
+        let modelRow = UIStackView(arrangedSubviews: [importBtn, removeBtn])
+        modelRow.spacing = 6
+        let infoStack = UIStackView(arrangedSubviews: [infoName, infoTitle, speedRow, deckRow, modelRow, modelInfo])
         infoStack.axis = .vertical
         infoStack.spacing = 3
         infoStack.setCustomSpacing(10, after: speedRow)
+        infoStack.setCustomSpacing(10, after: deckRow)
+        importBtn.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        removeBtn.heightAnchor.constraint(equalToConstant: 28).isActive = true
         infoStack.alignment = .leading
         infoStack.translatesAutoresizingMaskIntoConstraints = false
         info.contentView.addSubview(infoStack)
@@ -144,7 +189,7 @@ final class TeamScreen: Screen {
             gridPanel.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
             gridPanel.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -16),
             gridPanel.bottomAnchor.constraint(equalTo: foe.topAnchor, constant: -10),
-            gridPanel.heightAnchor.constraint(equalToConstant: 196),
+            gridPanel.heightAnchor.constraint(equalToConstant: 176),
             scroll.leadingAnchor.constraint(equalTo: gridPanel.contentView.leadingAnchor, constant: 10),
             scroll.trailingAnchor.constraint(equalTo: gridPanel.contentView.trailingAnchor, constant: -10),
             scroll.topAnchor.constraint(equalTo: gridPanel.contentView.topAnchor, constant: 10),
@@ -207,7 +252,14 @@ final class RosterTile: UIControl {
     private let name = Glass.label("", size: 10, weight: .medium, color: Theme.text2)
     private let order = Glass.label("", size: 10, weight: .bold, color: Theme.ink, mono: true)
 
+    private let def: FighterDef
+
+    func refreshImage() {
+        face.image = Portraits.image(def, .bust, size: CGSize(width: 56, height: 56))
+    }
+
     init(def: FighterDef, unlocked: Bool) {
+        self.def = def
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         face.image = Portraits.image(def, .bust, size: CGSize(width: 56, height: 56))

@@ -57,6 +57,8 @@ final class Arena {
             }
         }
         scene.background.contents = img
+        scene.lightingEnvironment.contents = img
+        scene.lightingEnvironment.intensity = 1.3
         scene.fogColor = hor.darker(0.15)
         scene.fogStartDistance = 30
         scene.fogEndDistance = 175

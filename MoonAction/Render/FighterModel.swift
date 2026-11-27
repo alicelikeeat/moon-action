@@ -28,6 +28,23 @@ final class FighterModel {
     private var materials: [SCNMaterial] = []
     private var currentAura = -1
     private var rng: UInt64
+    private var retarget: Retargeter?
+    private var importedHolder: SCNNode?
+    /// Number of game joints mapped onto an imported skeleton (nil = procedural model).
+    private(set) var importedBones: Int?
+
+    private struct Weak { weak var m: FighterModel? }
+    private static var live: [Weak] = []
+
+    /// Called once per frame: copies procedural poses onto imported skeletons.
+    static func syncImported() {
+        live.removeAll { $0.m == nil }
+        for w in live { w.m?.syncPose() }
+    }
+
+    func syncPose() {
+        retarget?.sync(joints: joints, reference: hips)
+    }
 
     static let hover: Float = 0.28
 
@@ -41,7 +58,11 @@ final class FighterModel {
         rng = def.id.unicodeScalars.reduce(UInt64(1469598103934665603)) { ($0 ^ UInt64($1.value)) &* 1099511628211 } | 1
         aura = Toon.aura(def.look.aura, height: 1.9)
         buildSkeleton()
-        buildMesh()
+        if let url = ModelLibrary.url(for: def.id), let node = ModelLibrary.load(url) {
+            setupImported(node)
+        } else {
+            buildMesh()
+        }
         root.simdScale = SIMD3(repeating: def.look.height)
         apply(FighterModel.stancePose, duration: 0)
         idle()
@@ -104,6 +125,49 @@ final class FighterModel {
     }
 
     private func P(_ n: SCNNode) -> SIMD3<Float> { n.simdConvertPosition(.zero, to: root) }
+
+    // MARK: - Imported model
+
+    private func setupImported(_ container: SCNNode) {
+        let opts = ModelLibrary.settings(for: def.id)
+        // Measure the model in its own space.
+        var lo = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
+        var hi = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
+        container.enumerateHierarchy { n, _ in
+            guard n.geometry != nil else { return }
+            let (a, b) = n.boundingBox
+            for x in [a.x, b.x] { for y in [a.y, b.y] { for z in [a.z, b.z] {
+                let p = n.simdConvertPosition(SIMD3(Float(x), Float(y), Float(z)), to: container)
+                lo = simd_min(lo, p)
+                hi = simd_max(hi, p)
+            } } }
+        }
+        let height = max(0.001, hi.y - lo.y)
+        let target = Float(opts["height"] ?? 2.15)
+        let k = target / height
+        let holder = SCNNode()
+        holder.simdScale = SIMD3(repeating: k)
+        holder.simdEulerAngles = SIMD3(0, Float(opts["yaw"] ?? 0) * .pi / 180, 0)
+        let center = (lo + hi) / 2
+        container.simdPosition = SIMD3(-center.x, -lo.y, -center.z)
+        holder.addChildNode(container)
+        body.addChildNode(holder)
+        importedHolder = holder
+
+        container.enumerateHierarchy { n, _ in
+            for m in n.geometry?.materials ?? [] {
+                m.isDoubleSided = m.isDoubleSided || m.transparency < 1
+                self.materials.append(m)
+            }
+        }
+        let r = Retargeter(container: container)
+        importedBones = r.mappedCount
+        if r.isValid {
+            retarget = r
+            FighterModel.live.append(Weak(m: self))
+            syncPose()
+        }
+    }
 
     // MARK: - Mesh
 
@@ -618,6 +682,7 @@ final class FighterModel {
         }
     }
 
-    var handWorld: SIMD3<Float> { fistR.simdWorldPosition }
+    var handWorld: SIMD3<Float> { retarget?.handR?.simdWorldPosition ?? fistR.simdWorldPosition }
+    var isImported: Bool { importedHolder != nil }
     var chestWorld: SIMD3<Float> { root.simdWorldPosition + SIMD3(0, 1.35 * def.look.height, 0) }
 }
