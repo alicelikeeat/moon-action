@@ -16,11 +16,9 @@ jobs:
 
       - name: Select Xcode 26 (Liquid Glass SDK)
         run: |
-          ls -d /Applications/Xcode*.app || true
           X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; fi
           xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -31,44 +29,78 @@ jobs:
       - name: Build (unsigned, device)
         run: |
           set -o pipefail
-          xcodebuild -version
-          xcodebuild \
-            -project MoonAction.xcodeproj \
-            -target MoonAction \
-            -configuration Release \
-            -sdk iphoneos \
-            SYMROOT="$PWD/build" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tee build.log | grep -E "error:|warning: .*(Swift|swift)|\*\* BUILD" || true
-          test -d build/Release-iphoneos/MoonAction.app || { grep -n "error:" build.log | head -50; exit 1; }
+          xcodebuild -project MoonAction.xcodeproj -target MoonAction -configuration Release -sdk iphoneos \
+            SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|\*\* BUILD" || true
+          test -d build/Release-iphoneos/MoonAction.app || { grep -n "error:" build.log | head -80; exit 1; }
 
       - name: Package IPA
         run: |
-          rm -rf Payload
-          mkdir Payload
+          rm -rf Payload && mkdir Payload
           cp -R build/Release-iphoneos/MoonAction.app Payload/
           zip -qry MoonAction-unsigned.ipa Payload
           ls -lh MoonAction-unsigned.ipa
 
-      - name: Upload artifact
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: MoonAction-unsigned-ipa
           path: MoonAction-unsigned.ipa
 
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project MoonAction.xcodeproj -target MoonAction -configuration Debug -sdk iphonesimulator -arch arm64 \
+            SYMROOT="$PWD/simbuild" CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -3
+
+      - name: Simulator screenshots
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          c=[(rt,dev) for rt,devs in d.items() if "iOS" in rt for dev in devs if "Pro" in dev["name"] and "Max" not in dev["name"] and "iPhone" in dev["name"]]
+          c.sort(key=lambda x:x[0])
+          print(c[-1][1]["udid"])')
+          echo "Simulator $UDID"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 || true
+          xcrun simctl install "$UDID" simbuild/Debug-iphonesimulator/MoonAction.app
+          shot() { xcrun simctl io "$UDID" screenshot "shots/$1.png"; }
+          run() { xcrun simctl launch --terminate-running-process "$UDID" com.moonaction.game -demo "$1" > /dev/null; }
+          run home;     sleep 6;  shot 1-home
+          run team;     sleep 5;  shot 2-team
+          run summon;   sleep 5;  shot 3-summon
+          run battle;   sleep 4;  shot 4-battle-start; sleep 3; shot 5-battle-a; sleep 3; shot 6-battle-b; sleep 4; shot 7-battle-c
+          run special;  sleep 3.3; shot 8-special-a; sleep 0.6; shot 9-special-b; sleep 0.8; shot 10-special-c
+          run ultimate; sleep 4.6; shot 11-ult-cutin; sleep 1.4; shot 12-ult-fire; sleep 0.8; shot 13-ult-hit
+          run result;   sleep 5;  shot 14-result
+          ls -la shots
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/
+          if-no-files-found: ignore
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Moon Action v1.0.${{ github.run_number }} (unsigned IPA)
+          tag_name: v2.0.${{ github.run_number }}
+          name: Moon Action v2.0.${{ github.run_number }} (unsigned IPA)
           target_commitish: ${{ github.sha }}
-          files: MoonAction-unsigned.ipa
+          files: |
+            MoonAction-unsigned.ipa
+            shots/*.png
           body: |
-            Unsigned iOS build of **Moon Action** — an original 3v3 card-based arena fighter.
+            Unsigned iOS build of **Moon Action** — an original portrait 3D card battle game.
+
+            * Portrait, over-the-shoulder 3D camera, procedurally generated cel-shaded fighters
+            * Card system: Strike · Blast · Special Art · Ultimate Art · Effect cards · Eclipse Rush team finisher
+            * Native iOS 26 Liquid Glass UI
 
             This IPA is **not signed**. Sideload it with a tool that re-signs the app
-            (e.g. AltStore, Sideloadly, or TrollStore on supported devices).
-
-            Requires iOS 15.0 or later. Landscape only.
+            (e.g. AltStore, Sideloadly, or TrollStore on supported devices). Requires iOS 15+.

@@ -1,0 +1,167 @@
+import UIKit
+import SceneKit
+import simd
+
+final class SummonScreen: Screen {
+    private var arena: Arena!
+    private let portal = SCNNode()
+    private var revealed: FighterModel?
+    private var coinLabel: UILabel!
+    private var summonBtn: UIButton!
+    private var backBtn: UIButton!
+    private var resultPanel: UIView?
+    private var busy = false
+    private var t: Double = 0
+
+    override func build() {
+        arena = Arena(theme: 3)
+        scene = arena.scene
+        pointOfView = arena.camera
+        arena.camera.simdPosition = SIMD3(0, 1.8, 7.5)
+        arena.camera.simdLook(at: SIMD3(0, 1.1, 0))
+
+        let color = UIColor(hex: 0xB18CFF)
+        for (r, w) in [(Float(1.6), Float(0.09)), (Float(1.9), Float(0.04))] {
+            let ring = SCNNode(geometry: SCNTorus(ringRadius: CGFloat(r), pipeRadius: CGFloat(w)))
+            ring.geometry?.materials = [Toon.energy(color)]
+            ring.simdEulerAngles = SIMD3(.pi / 2, 0, 0)
+            ring.runAction(.repeatForever(.rotateBy(x: 0, y: r > 1.7 ? -2 : 2, z: 0, duration: 3)))
+            portal.addChildNode(ring)
+        }
+        let disc = SCNNode(geometry: SCNCylinder(radius: 1.55, height: 0.01))
+        disc.geometry?.materials = [Toon.energy(color.darker(0.4), alpha: 0.5)]
+        disc.simdEulerAngles = SIMD3(.pi / 2, 0, 0)
+        portal.addChildNode(disc)
+        portal.addChildNode(Toon.glowSprite(color, size: 5))
+        let ps = Toon.aura(color, height: 0.2)
+        ps.birthRate = 60
+        ps.emitterShape = SCNTorus(ringRadius: 1.6, pipeRadius: 0.1)
+        ps.emittingDirection = SCNVector3(0, 0, 1)
+        portal.addParticleSystem(ps)
+        portal.simdPosition = SIMD3(0, 1.6, 0)
+        arena.world.addChildNode(portal)
+        buildUI()
+        refresh()
+    }
+
+    override func update(dt: Double) {
+        t += dt
+        portal.simdScale = SIMD3(repeating: 1 + Float(sin(t * 2)) * 0.03)
+        if let m = revealed {
+            m.root.simdEulerAngles = SIMD3(0, Float(sin(t * 0.5) * 0.35), 0)
+        }
+    }
+
+    private func buildUI() {
+        backBtn = Glass.button(symbol: "chevron.left", fontSize: 16) { [weak self] in
+            guard let self, !self.busy else { return }
+            self.go(HomeScreen())
+        }
+        ui.addSubview(backBtn)
+        let head = header("Summon", "★★ 75%  ·  ★★★ 25%  ·  duplicates +\(Save.duplicateXP) XP", tint: UIColor.maPurple.withAlphaComponent(0.3))
+        ui.addSubview(head)
+        let (coins, label) = chip(symbol: "moon.stars.fill", text: "", tint: .maCoin)
+        coinLabel = label
+        ui.addSubview(coins)
+        summonBtn = Glass.button("Summon ×1", subtitle: "\(Save.summonCost) moon coins", symbol: "sparkles",
+                                 style: .prominent, tint: .maPurple, fontSize: 22) { [weak self] in self?.summon() }
+        ui.addSubview(summonBtn)
+        NSLayoutConstraint.activate([
+            backBtn.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 14),
+            backBtn.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8),
+            backBtn.widthAnchor.constraint(equalToConstant: 44),
+            backBtn.heightAnchor.constraint(equalToConstant: 44),
+            head.centerXAnchor.constraint(equalTo: ui.centerXAnchor),
+            head.topAnchor.constraint(equalTo: backBtn.bottomAnchor, constant: 10),
+            coins.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -14),
+            coins.centerYAnchor.constraint(equalTo: backBtn.centerYAnchor),
+            summonBtn.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 30),
+            summonBtn.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -30),
+            summonBtn.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -12),
+            summonBtn.heightAnchor.constraint(equalToConstant: 64),
+        ])
+    }
+
+    private func refresh() {
+        coinLabel.text = "\(Save.shared.data.coins)"
+        let ok = Save.shared.data.coins >= Save.summonCost && !busy
+        summonBtn.isEnabled = ok
+        summonBtn.alpha = ok ? 1 : 0.5
+        backBtn.alpha = busy ? 0.5 : 1
+    }
+
+    private func summon() {
+        let save = Save.shared
+        guard !busy, save.data.coins >= Save.summonCost else { return }
+        busy = true
+        save.data.coins -= Save.summonCost
+        let rarity = chance(0.25) ? 3 : 2
+        let def = Roster.all.filter { $0.rarity == rarity }.randomElement() ?? Roster.kai
+        let isNew = !save.isUnlocked(def.id)
+        if isNew { save.data.unlocked.append(def.id) } else { save.addXP(def.id, Save.duplicateXP) }
+        save.persist()
+        refresh()
+        resultPanel?.removeFromSuperview()
+        revealed?.root.removeFromParentNode()
+        revealed = nil
+
+        Sound.play(.charge)
+        let spin = SCNAction.rotateBy(x: 0, y: 0, z: 12, duration: 1.2)
+        spin.timingMode = .easeIn
+        portal.runAction(.group([spin, .sequence([.scale(to: 1.4, duration: 1.1), .scale(to: 1, duration: 0.1)])]))
+        realDelay(1.2) { [weak self] in self?.reveal(def, isNew: isNew) }
+    }
+
+    private func reveal(_ def: FighterDef, isNew: Bool) {
+        Sound.play(def.rarity == 3 ? .ultimate : .explode)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        SCNNode.emit(Toon.burst(def.look.aura, count: 160, speed: 10, size: 0.5, life: 0.7), at: SIMD3(0, 1.6, 0), in: arena.world)
+        let flash = UIView(frame: ui.bounds)
+        flash.backgroundColor = def.look.aura.lighter(0.5)
+        flash.isUserInteractionEnabled = false
+        ui.addSubview(flash)
+        UIView.animate(withDuration: 0.6, animations: { flash.alpha = 0 }) { _ in flash.removeFromSuperview() }
+
+        let m = FighterModel(def: def)
+        m.root.simdPosition = SIMD3(0, 0, 0.6)
+        m.setAura(3)
+        m.victory()
+        arena.world.addChildNode(m.root)
+        revealed = m
+        realDelay(1.5) { m.setAura(1) }
+
+        let panel = Glass.panel(radius: 26, tint: def.look.aura.withAlphaComponent(0.3))
+        let stars = Glass.label(String(repeating: "★", count: def.rarity), size: 22, weight: .black,
+                                color: def.rarity == 3 ? .maCoin : UIColor(hex: 0x8FE3FF))
+        let name = Glass.label(def.name, size: 28, weight: .black)
+        let title = Glass.label(def.title, size: 15, weight: .bold, color: def.look.aura.lighter(0.4))
+        let result = Glass.label(isNew ? "New fighter unlocked!" : "+\(Save.duplicateXP) XP", size: 17, weight: .heavy,
+                                 color: isNew ? UIColor(hex: 0x7CFF8A) : .maCoin)
+        let moves = Glass.label("Special · \(def.specialName)   Ultimate · \(def.ultimateName)", size: 12, weight: .semibold,
+                                color: UIColor(white: 1, alpha: 0.8))
+        let st = UIStackView(arrangedSubviews: [stars, name, title, result, moves])
+        st.axis = .vertical
+        st.spacing = 3
+        st.translatesAutoresizingMaskIntoConstraints = false
+        panel.contentView.addSubview(st)
+        ui.addSubview(panel)
+        NSLayoutConstraint.activate([
+            panel.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 18),
+            panel.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -18),
+            panel.bottomAnchor.constraint(equalTo: summonBtn.topAnchor, constant: -14),
+            st.leadingAnchor.constraint(equalTo: panel.contentView.leadingAnchor, constant: 18),
+            st.trailingAnchor.constraint(equalTo: panel.contentView.trailingAnchor, constant: -18),
+            st.topAnchor.constraint(equalTo: panel.contentView.topAnchor, constant: 14),
+            st.bottomAnchor.constraint(equalTo: panel.contentView.bottomAnchor, constant: -14),
+        ])
+        panel.alpha = 0
+        panel.transform = CGAffineTransform(translationX: 0, y: 30)
+        UIView.animate(withDuration: 0.4, delay: 0.2, usingSpringWithDamping: 0.8, initialSpringVelocity: 0) {
+            panel.alpha = 1
+            panel.transform = .identity
+        }
+        resultPanel = panel
+        busy = false
+        refresh()
+    }
+}

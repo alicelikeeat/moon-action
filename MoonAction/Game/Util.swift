@@ -1,21 +1,5 @@
 import UIKit
-import SpriteKit
-
-enum GameSize {
-    static var size = CGSize(width: 1334, height: 750)
-}
-
-enum Layout {
-    static var safeLeft: CGFloat = 16
-    static var safeRight: CGFloat = 16
-    static var safeBottom: CGFloat = 10
-}
-
-enum Fonts {
-    static let heavy = "AvenirNext-HeavyItalic"
-    static let bold = "AvenirNext-Bold"
-    static let demi = "AvenirNext-DemiBold"
-}
+import simd
 
 extension UIColor {
     convenience init(hex: UInt32, alpha: CGFloat = 1) {
@@ -35,99 +19,97 @@ extension UIColor {
 
     func lighter(_ t: CGFloat = 0.3) -> UIColor { blend(.white, t) }
     func darker(_ t: CGFloat = 0.3) -> UIColor { blend(.black, t) }
-}
 
-@MainActor
-func makeLabel(_ text: String, size: CGFloat, color: UIColor = .white, font: String = Fonts.heavy,
-               align: SKLabelHorizontalAlignmentMode = .center) -> SKLabelNode {
-    let l = SKLabelNode(fontNamed: font)
-    l.text = text
-    l.fontSize = size
-    l.fontColor = color
-    l.verticalAlignmentMode = .center
-    l.horizontalAlignmentMode = align
-    return l
-}
-
-/// A label with a dark drop shadow for readability over busy backgrounds.
-@MainActor
-final class ShadowLabel: SKNode {
-    let main: SKLabelNode
-    let shadow: SKLabelNode
-
-    init(_ text: String, size: CGFloat, color: UIColor = .white, font: String = Fonts.heavy,
-         align: SKLabelHorizontalAlignmentMode = .center) {
-        main = makeLabel(text, size: size, color: color, font: font, align: align)
-        shadow = makeLabel(text, size: size, color: UIColor(white: 0, alpha: 0.65), font: font, align: align)
-        super.init()
-        shadow.position = CGPoint(x: 2, y: -3)
-        addChild(shadow)
-        addChild(main)
-    }
-
-    required init?(coder aDecoder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    var text: String? {
-        get { main.text }
-        set { main.text = newValue; shadow.text = newValue }
-    }
-
-    var color: UIColor? {
-        get { main.fontColor }
-        set { main.fontColor = newValue }
-    }
-}
-
-@MainActor
-enum Tex {
-    static let glow: SKTexture = {
-        let size = CGSize(width: 64, height: 64)
-        let img = UIGraphicsImageRenderer(size: size).image { ctx in
-            let colors = [UIColor.white.cgColor,
-                          UIColor.white.withAlphaComponent(0.5).cgColor,
-                          UIColor.white.withAlphaComponent(0).cgColor] as CFArray
-            let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.35, 1])!
-            ctx.cgContext.drawRadialGradient(g, startCenter: CGPoint(x: 32, y: 32), startRadius: 0,
-                                             endCenter: CGPoint(x: 32, y: 32), endRadius: 32, options: [])
-        }
-        return SKTexture(image: img)
-    }()
-
-    static func verticalGradient(top: UIColor, bottom: UIColor, height: CGFloat = 256) -> SKTexture {
-        let size = CGSize(width: 4, height: height)
-        let img = UIGraphicsImageRenderer(size: size).image { ctx in
-            let colors = [top.cgColor, bottom.cgColor] as CFArray
-            let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1])!
-            ctx.cgContext.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
-        }
-        return SKTexture(image: img)
-    }
-}
-
-@MainActor
-enum Haptics {
-    static let light = UIImpactFeedbackGenerator(style: .light)
-    static let heavy = UIImpactFeedbackGenerator(style: .heavy)
-
-    static func hit(_ big: Bool) {
-        (big ? heavy : light).impactOccurred()
-    }
-}
-
-extension CGFloat {
-    func clamped(_ lo: CGFloat, _ hi: CGFloat) -> CGFloat { Swift.min(hi, Swift.max(lo, self)) }
+    static let maRed = UIColor(hex: 0xE5483A)
+    static let maPurple = UIColor(hex: 0x8D5CF6)
+    static let maGold = UIColor(hex: 0xF5B83D)
+    static let maBlue = UIColor(hex: 0x3B8BF6)
+    static let maTeal = UIColor(hex: 0x23A3B8)
+    static let maCoin = UIColor(hex: 0xFFD45A)
+    static let maGreen = UIColor(hex: 0x4CD964)
 }
 
 extension Double {
     func clamped(_ lo: Double, _ hi: Double) -> Double { Swift.min(hi, Swift.max(lo, self)) }
 }
 
+extension Float {
+    func clamped(_ lo: Float, _ hi: Float) -> Float { Swift.min(hi, Swift.max(lo, self)) }
+}
+
+extension CGFloat {
+    func clamped(_ lo: CGFloat, _ hi: CGFloat) -> CGFloat { Swift.min(hi, Swift.max(lo, self)) }
+}
+
 func chance(_ p: Double) -> Bool { Double.random(in: 0..<1) < p }
 
-extension SKScene {
-    @MainActor
-    func transition(to scene: SKScene, duration: TimeInterval = 0.45) {
-        scene.scaleMode = .aspectFit
-        view?.presentScene(scene, transition: .fade(with: .black, duration: duration))
+func lerp(_ a: Float, _ b: Float, _ t: Float) -> Float { a + (b - a) * t }
+
+func easeOut(_ t: Float) -> Float { 1 - (1 - t) * (1 - t) }
+
+@MainActor
+enum Haptics {
+    static let light = UIImpactFeedbackGenerator(style: .light)
+    static let heavy = UIImpactFeedbackGenerator(style: .heavy)
+    static let rigid = UIImpactFeedbackGenerator(style: .rigid)
+
+    static func hit(_ big: Bool) { (big ? heavy : light).impactOccurred() }
+}
+
+/// Main-thread scheduler driven by game time (pauses with the game).
+@MainActor
+final class Timeline {
+    private struct Item {
+        let time: Double
+        let order: Int
+        let tag: ObjectIdentifier?
+        let fn: () -> Void
+    }
+
+    private var items: [Item] = []
+    private var counter = 0
+    private(set) var now: Double = 0
+
+    func after(_ delay: Double, tag: AnyObject? = nil, _ fn: @escaping () -> Void) {
+        counter += 1
+        items.append(Item(time: now + max(0, delay), order: counter, tag: tag.map { ObjectIdentifier($0) }, fn: fn))
+    }
+
+    /// Schedule a list of (delay-from-previous, action) steps.
+    func sequence(tag: AnyObject?, _ steps: [(Double, () -> Void)]) {
+        var t = 0.0
+        for (d, fn) in steps {
+            t += d
+            after(t, tag: tag, fn)
+        }
+    }
+
+    func cancel(tag: AnyObject) {
+        let id = ObjectIdentifier(tag)
+        items.removeAll { $0.tag == id }
+    }
+
+    func has(tag: AnyObject) -> Bool {
+        let id = ObjectIdentifier(tag)
+        return items.contains { $0.tag == id }
+    }
+
+    func tick(_ dt: Double) {
+        now += dt
+        while true {
+            guard let idx = items.indices.filter({ items[$0].time <= now })
+                .min(by: { (items[$0].time, items[$0].order) < (items[$1].time, items[$1].order) }) else { break }
+            let item = items.remove(at: idx)
+            item.fn()
+        }
+    }
+}
+
+/// Runs `fn` on the main actor after `seconds` of real time.
+@MainActor
+func realDelay(_ seconds: Double, _ fn: @escaping @MainActor () -> Void) {
+    Task { @MainActor in
+        try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+        fn()
     }
 }
