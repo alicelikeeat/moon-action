@@ -174,15 +174,15 @@ enum VFX {
         p.particleVelocityVariation = 0.8
         p.emittingDirection = SCNVector3(0, 1, 0)
         p.spreadingAngle = 8
-        p.particleSize = 0.22
-        p.particleSizeVariation = 0.08
+        p.particleSize = 0.13
+        p.particleSizeVariation = 0.05
         p.blendMode = .additive
         p.isLightingEnabled = false
         p.acceleration = SCNVector3(0, 2.5, 0)
         p.orientationMode = .billboardViewAligned
         p.propertyControllers = [
-            .color: colorRamp([.white, color.lighter(0.2), color, color.darker(0.2)], [0, 0.2, 0.6, 1]),
-            .opacity: ramp([0, 0.9, 0.6, 0], [0, 0.15, 0.6, 1]),
+            .color: colorRamp([color.lighter(0.5), color, color.darker(0.2)], [0, 0.4, 1]),
+            .opacity: ramp([0, 0.55, 0.35, 0], [0, 0.15, 0.6, 1]),
             .size: ramp([0.6, 1.0, 0.4], [0, 0.4, 1]),
         ]
         return p
@@ -212,7 +212,7 @@ enum VFX {
 
     /// Hit impact: star flash + shockwave ring + sparks (+ debris for heavy).
     static func impact(at p: SIMD3<Float>, color: UIColor, heavy: Bool, in parent: SCNNode) {
-        let star = billboard(starburst, color: color.lighter(0.5), size: heavy ? 1.9 : 1.1, intensity: 3)
+        let star = billboard(starburst, color: color.lighter(0.5), size: heavy ? 1.4 : 0.8, intensity: 2.2)
         star.simdEulerAngles.z = Float.random(in: 0..<(2 * .pi))
         star.scale = SCNVector3(0.3, 0.3, 0.3)
         star.runAction(.sequence([.scale(to: 1, duration: 0.05), .group([.scale(to: 1.25, duration: 0.12), .fadeOut(duration: 0.12)])]))
@@ -262,7 +262,7 @@ enum VFX {
         cm.lightingModel = .constant
         core.geometry?.materials = [cm]
         n.addChildNode(core)
-        let corona = billboard(Toon.glowImage, color: color, size: CGFloat(radius * 4.2), intensity: 2.5)
+        let corona = billboard(Toon.glowImage, color: color, size: CGFloat(radius * 3), intensity: 1.8)
         n.addChildNode(corona)
         let spin = billboard(ring, color: color.lighter(0.3), size: CGFloat(radius * 2.6), intensity: 2)
         spin.runAction(.repeatForever(.sequence([.scale(to: 1.25, duration: 0.08), .scale(to: 0.9, duration: 0.08)])))

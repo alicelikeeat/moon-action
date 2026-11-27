@@ -629,7 +629,7 @@ final class FighterModel {
         guard level != currentAura else { return }
         currentAura = level
         let l = max(0, min(3, level))
-        aura.birthRate = [0, 14, 150, 280][l]
+        aura.birthRate = [0, 8, 90, 170][l]
         sparks.birthRate = [0, 0, 40, 70][l]
     }
 
@@ -652,7 +652,13 @@ final class FighterModel {
     func setBarrier(_ on: Bool) {
         if on, barrier == nil {
             let s = SCNNode(geometry: SCNSphere(radius: 1.05))
-            s.geometry?.materials = [Toon.energy(UIColor(hex: 0x6FD0FF), alpha: 0.18)]
+            let m = VFX.beamMaterial(UIColor(hex: 0x6FD0FF), intensity: 1.2)
+            // Rim-lit shield: bright at the silhouette, clear in the middle.
+            m.shaderModifiers = [.fragment: """
+            float f = abs(dot(normalize(_surface.normal), normalize(_surface.view)));
+            _output.color.rgb *= pow(1.0 - f, 2.5);
+            """]
+            s.geometry?.materials = [m]
             s.simdPosition = SIMD3(0, 1.0, 0)
             s.runAction(.repeatForever(.sequence([.scale(to: 1.05, duration: 0.4), .scale(to: 0.97, duration: 0.4)])))
             body.addChildNode(s)
