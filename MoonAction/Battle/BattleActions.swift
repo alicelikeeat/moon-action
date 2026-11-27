@@ -32,9 +32,12 @@ extension BattleScreen {
             guard s.eclipseReady else { return false }
             card = Roster.eclipseCard
         default:
-            guard idx >= 0, idx < 4, let c = s.hand[idx], s.energy >= Double(c.cost) else { return false }
+            guard idx >= 0, idx < 4, cardStatus(s, idx).playable, let c = s.hand[idx] else { return false }
             card = c
         }
+        // Chase eligibility is decided before the relay window is consumed.
+        let chase = card.kind == .strike && chaseAvailable(s)
+        if let r = s.relay { r.closed = true }
         if chaining {
             timeline.cancel(tag: s.current)
             s.current.busy = false
@@ -61,7 +64,6 @@ extension BattleScreen {
         }
         switch card.kind {
         case .strike:
-            let chase = now < opponent(of: s).current.launchedUntil
             doStrike(s, power: card.power * mul * (chase ? 1.15 : 1), hits: card.hits, style: .normal, chase: chase)
         case .blast: doBlast(s, power: card.power * mul, hits: card.hits)
         case .special: doSpecial(s, card: card, mul: mul)
@@ -76,10 +78,86 @@ extension BattleScreen {
         return true
     }
 
+    // MARK: - Card eligibility (single source of truth for logic + HUD)
+
+    /// Strike chase is available: the opponent is airborne from a launch, or our tagged-in
+    /// relay fighter still holds its chase window on the same target.
+    func chaseAvailable(_ s: Side) -> Bool {
+        let t = opponent(of: s).current
+        guard !t.isKO else { return false }
+        return now < t.launchedUntil || isRelayChase(s)
+    }
+
+    func isRelayChase(_ s: Side) -> Bool {
+        guard let r = validRelay(s), let e = r.entrant else { return false }
+        return e === s.current
+    }
+
+    func cardStatus(_ s: Side, _ idx: Int) -> CardStatus {
+        guard idx >= 0, idx < 4, let card = s.hand[idx] else { return CardStatus() }
+        let affordable = s.energy >= Double(card.cost)
+        let chaining = canChain(s)
+        let playable = affordable && (canAct(s) || chaining)
+        return CardStatus(playable: playable,
+                          chain: playable && chaining,
+                          chase: playable && card.kind == .strike && chaseAvailable(s))
+    }
+
+    // MARK: - Tag-in relay chase
+
+    /// The relay if it is still meaningful (same, living target; not timed out; battle running).
+    func validRelay(_ s: Side) -> Relay? {
+        guard let r = s.relay, !r.closed, !battleOver else { return nil }
+        let t = opponent(of: s).current
+        guard r.target === t, !t.isKO, now < r.deadline else { return nil }
+        return r
+    }
+
+    /// Can bench fighter `i` tag in to continue the chase right now?
+    func relayEligible(_ s: Side, _ i: Int) -> Bool {
+        guard started, !cinematic, let r = validRelay(s), !r.used, r.launcher === s.current, now < r.launchUntil else { return false }
+        guard i >= 0, i < s.team.count, i != s.active, !s.team[i].isKO, now >= s.swapReadyAt else { return false }
+        let c = s.current
+        guard !c.isKO, now >= c.stunUntil else { return false }
+        return s.team[i].def.cards.contains { $0.kind == .strike && Double($0.cost) <= s.energy }
+    }
+
+    /// Tag bench fighter `i` in mid-launch. Cancels the launcher's recovery; the entrant
+    /// gets a guaranteed affordable strike and a manual chase window.
+    @discardableResult
+    func doRelay(_ s: Side, _ i: Int) -> Bool {
+        guard relayEligible(s, i), let r = s.relay else { return false }
+        swapCore(s, to: i, banner: L10n.f("battle.relayIn", s.team[i].def.name.s))
+        r.used = true
+        r.entrant = s.current
+        r.deadline = max(r.launchUntil, now + Tune.relayGrace)
+        guaranteeStrike(s)
+        if s.isPlayer { hud.relayStarted() }
+        return true
+    }
+
+    /// Ensures the hand holds at least one strike the side can pay for (no energy is spent here).
+    func guaranteeStrike(_ s: Side) {
+        let ok: (Card) -> Bool = { $0.kind == .strike && Double($0.cost) <= s.energy }
+        if s.hand.contains(where: { $0.map(ok) ?? false }) { return }
+        let n = s.current
+        let slot = 3
+        var card: Card?
+        if let k = n.deck.lastIndex(where: ok) {
+            card = n.deck.remove(at: k)
+        } else {
+            card = n.def.cards.first(where: ok)
+        }
+        guard let c = card else { return }
+        if let old = s.hand[slot] { n.deck.insert(old, at: 0) }
+        s.hand[slot] = c
+    }
+
     // MARK: - Basic actions (gestures)
 
-    func doBasic(_ s: Side) {
-        guard canAct(s) else { return }
+    @discardableResult
+    func doBasic(_ s: Side) -> Bool {
+        guard canAct(s) else { return false }
         let a = s.current
         let t = opponent(of: s).current
         s.chain = 0
@@ -88,38 +166,50 @@ extension BattleScreen {
         } else {
             doBlast(s, power: 0.22, hits: 1, small: true)
         }
+        return true
     }
 
-    func dashIn(_ s: Side) {
-        guard canAct(s) else { return }
+    @discardableResult
+    func dashIn(_ s: Side) -> Bool {
+        guard canAct(s) else { return false }
         let a = s.current
         let t = opponent(of: s).current
         let d = dist(a, t)
-        guard d > 2.2 else { return }
+        guard d > 2.2 else { return false }
         let dir = dirTo(a, t)
         a.model.afterimage(in: fxRoot)
         moveTo(a, t.pos - dir * 1.9, 0.22)
         a.model.dash()
         timeline.after(0.24, tag: a) { a.model.stance() }
         Sound.play(.dodge)
+        return true
     }
 
-    func stepBack(_ s: Side) {
-        guard canAct(s) else { return }
+    @discardableResult
+    func stepBack(_ s: Side) -> Bool {
+        guard canAct(s) else { return false }
         let a = s.current
         let t = opponent(of: s).current
         let dir = dirTo(a, t)
         moveTo(a, a.pos - dir * 3.2, 0.22)
         a.model.afterimage(in: fxRoot)
         Sound.play(.dodge)
+        return true
+    }
+
+    /// Actual evade cost right now: double while escaping hitstun (combo escape).
+    /// Shared by manual input, enemy AI and the player's AUTO mode.
+    func dodgeCost(_ s: Side) -> Double {
+        Tune.dodgeCost * (now < s.current.stunUntil ? 2 : 1)
     }
 
     /// Evade: a sidestep around the opponent with brief invincibility. Also breaks combos.
+    /// Returns false (and changes nothing) when the evade cannot be executed.
     @discardableResult
     func dodge(_ s: Side, lateral: Float) -> Bool {
         let c = s.current
         let escaping = now < c.stunUntil
-        let cost = Tune.dodgeCost * (escaping ? 2 : 1)
+        let cost = dodgeCost(s)
         guard started, !battleOver, !cinematic, !c.isKO, s.dodge >= cost else { return false }
         s.dodge -= cost
         timeline.cancel(tag: c)
@@ -279,8 +369,8 @@ extension BattleScreen {
                 let d = simd_length(t.chest - p.pos)
                 if !p.aiRolled && (!o.isPlayer || o.auto) && d < 6 {
                     p.aiRolled = true
-                    if canAIDodge(o) && chance(aiDodgeChance * 0.9) {
-                        dodge(o, lateral: chance(0.5) ? 1 : -1)
+                    if canAIDodge(o) && roll(aiDodgeChance * 0.9) {
+                        _ = dodge(o, lateral: roll(0.5) ? 1 : -1)
                     }
                 }
                 if d < 0.75 + p.radius {
@@ -392,8 +482,8 @@ extension BattleScreen {
                 self.evaded(o, by: s)
                 return
             }
-            if (!o.isPlayer || o.auto) && self.canAIDodge(o) && chance(self.aiDodgeChance * (ultimate ? 1.1 : 1)) {
-                self.dodge(o, lateral: chance(0.5) ? 1 : -1)
+            if (!o.isPlayer || o.auto) && self.canAIDodge(o) && self.roll(self.aiDodgeChance * (ultimate ? 1.1 : 1)),
+               self.dodge(o, lateral: self.roll(0.5) ? 1 : -1) {
                 self.aiEvade(o, by: s)
                 return
             }
@@ -459,8 +549,8 @@ extension BattleScreen {
                 if near { self.evaded(o, by: s) } else { self.showEvade(t) }
                 return
             }
-            if (!o.isPlayer || o.auto) && self.canAIDodge(o) && chance(self.aiDodgeChance) {
-                self.dodge(o, lateral: chance(0.5) ? 1 : -1)
+            if (!o.isPlayer || o.auto) && self.canAIDodge(o) && self.roll(self.aiDodgeChance),
+               self.dodge(o, lateral: self.roll(0.5) ? 1 : -1) {
                 self.aiEvade(o, by: s)
                 return
             }
@@ -597,7 +687,7 @@ extension BattleScreen {
     /// AI evades happen at the last instant; some of them count as perfect.
     func aiEvade(_ o: Side, by s: Side) {
         let p = o.isPlayer ? 0.4 : min(0.55, 0.25 + Double(stage) * 0.015)
-        if chance(p) { perfectEvade(o, attacker: s) } else { showEvade(o.current) }
+        if roll(p) { perfectEvade(o, attacker: s) } else { showEvade(o.current) }
     }
 
     /// Perfect evade: slow-mo, teleport behind the attacker, attacker is left open, counter window.
@@ -632,14 +722,15 @@ extension BattleScreen {
 
     // MARK: - Hits
 
+    /// AI pre-check uses the same real cost as `dodge` (double while in hitstun).
     func canAIDodge(_ s: Side) -> Bool {
-        (!s.isPlayer || s.auto) && !s.current.isKO && s.dodge >= Tune.dodgeCost && !battleOver
+        (!s.isPlayer || s.auto) && !s.current.isKO && s.dodge >= dodgeCost(s) && !battleOver
     }
 
     func awardShard(_ s: Side) {
         guard s.cardLanded else { return }
         s.cardLanded = false
-        if s.chain >= 1 || chance(0.4) {
+        if s.chain >= 1 || roll(0.4) {
             s.shards = min(Tune.shardsNeeded, s.shards + 1)
         }
     }
@@ -655,17 +746,19 @@ extension BattleScreen {
             evaded(o, by: s)
             return false
         }
-        if aiDodge > 0 && canAIDodge(o) && chance(aiDodge) {
-            dodge(o, lateral: chance(0.5) ? 1 : -1)
-            aiEvade(o, by: s)
-            return false
+        if aiDodge > 0 && canAIDodge(o) && roll(aiDodge) {
+            // The evade must actually execute; otherwise this same hit lands normally.
+            if dodge(o, lateral: roll(0.5) ? 1 : -1) {
+                aiEvade(o, by: s)
+                return false
+            }
         }
         var dmg = power * a.atk * (1200 / (1000 + t.dfn * (now < t.cursedUntil ? 0.7 : 1))) * 1.25
-        dmg *= Double.random(in: 0.94...1.06)
+        dmg *= damageVariance()
         if now < a.powerUntil { dmg *= 1.3 }
         if now < t.barrierUntil { dmg *= 0.4 }
         dmg *= 1 + min(0.3, Double(max(0, s.comboCount - 4)) * 0.02)
-        let crit = chance(0.08)
+        let crit = roll(0.08)
         if crit { dmg *= 1.5 }
         dmg = dmg.rounded()
         t.hp = max(0, t.hp - dmg)
@@ -677,8 +770,10 @@ extension BattleScreen {
         away = simd_length(away) > 0.001 ? simd_normalize(away) : SIMD2(0, 1)
         t.tween = nil
         t.knockVel = away * knock
+        if let r = o.relay, r.entrant === t { r.closed = true }
         if heavy && knock >= 8 {
-            t.launchedUntil = now + 0.75
+            t.launchedUntil = now + Tune.launchWindow
+            s.relay = Relay(target: t, launcher: a, until: t.launchedUntil)
             VFX.dust(at: t.world3 + SIMD3(0, 0.1, 0), scale: 1.0, in: fxRoot)
         }
         t.model.hurt(heavy: heavy)
@@ -734,11 +829,19 @@ extension BattleScreen {
         }
     }
 
-    func swap(_ s: Side, to index: Int, forced: Bool) {
-        guard index != s.active, index >= 0, index < s.team.count, !s.team[index].isKO else { return }
+    @discardableResult
+    func swap(_ s: Side, to index: Int, forced: Bool) -> Bool {
+        guard index != s.active, index >= 0, index < s.team.count, !s.team[index].isKO else { return false }
         if !forced {
-            guard canAct(s), now >= s.swapReadyAt else { return }
+            guard canAct(s), now >= s.swapReadyAt else { return false }
         }
+        swapCore(s, to: index, banner: L10n.f("battle.tagin", s.team[index].def.name.s))
+        return true
+    }
+
+    /// Shared tag-in: cancels the old fighter's pending events, starts the normal swap cooldown,
+    /// resets the chain and deals a fresh hand (stale refill callbacks are invalidated by handGen).
+    func swapCore(_ s: Side, to index: Int, banner: String) {
         let old = s.current
         let pos = old.pos
         timeline.cancel(tag: old)
@@ -757,7 +860,7 @@ extension BattleScreen {
         SCNNode.emit(Toon.burst(n.def.aura, count: 70, speed: 5, size: 0.3, life: 0.5), at: n.chest, in: fxRoot)
         fillHand(s)
         updateFacing()
-        hud.moveBanner(L10n.f("battle.tagin", n.def.name.s), kind: .strike, side: s)
+        hud.moveBanner(banner, kind: .strike, side: s)
         Sound.play(.charge)
         if s.isPlayer { hud.teamChanged() }
     }

@@ -38,6 +38,9 @@ final class BattleHUD {
     private let energyRing = RingView(color: Theme.energy)
     private let energyText = Glass.label("0", size: 18, weight: .semibold, mono: true)
     private let comboLabel = Glass.label("", size: 22, weight: .bold, color: .white, align: .left)
+    private let chaseBar = UIView()
+    private let chaseFill = UIView()
+    private var chaseFillWidth: NSLayoutConstraint?
     private let chainLabel = Glass.caption("", size: 10, color: Theme.energy)
     private var pauseModal: UIView?
     private var lastEnergy = -1
@@ -165,7 +168,12 @@ final class BattleHUD {
             let p = PortraitView(image: Portraits.image(c.def, .bust, size: CGSize(width: 44, height: 44)), tint: c.def.aura, interactive: true, size: 36)
             p.onTap = { [weak self] in
                 guard let sc = self?.screen else { return }
-                sc.swap(sc.player, to: i, forced: false)
+                // Inside a valid relay window the tap is a relay; otherwise a normal swap.
+                if sc.relayEligible(sc.player, i) {
+                    sc.doRelay(sc.player, i)
+                } else {
+                    sc.swap(sc.player, to: i, forced: false)
+                }
             }
             benchRow.addArrangedSubview(p)
             pBench.append(p)
@@ -221,6 +229,29 @@ final class BattleHUD {
             cv.isHidden = true
         }
         root.addSubview(power)
+
+        // Chase time bar (visible while a strike can chase)
+        chaseBar.backgroundColor = UIColor(white: 1, alpha: 0.15)
+        chaseBar.layer.cornerRadius = 1.5
+        chaseBar.clipsToBounds = true
+        chaseBar.translatesAutoresizingMaskIntoConstraints = false
+        chaseBar.isHidden = true
+        chaseFill.backgroundColor = Theme.accent
+        chaseFill.translatesAutoresizingMaskIntoConstraints = false
+        chaseBar.addSubview(chaseFill)
+        root.addSubview(chaseBar)
+        let fw = chaseFill.widthAnchor.constraint(equalToConstant: 0)
+        chaseFillWidth = fw
+        NSLayoutConstraint.activate([
+            chaseBar.leadingAnchor.constraint(equalTo: hand.leadingAnchor, constant: 4),
+            chaseBar.trailingAnchor.constraint(equalTo: hand.trailingAnchor, constant: -4),
+            chaseBar.bottomAnchor.constraint(equalTo: hand.topAnchor, constant: -6),
+            chaseBar.heightAnchor.constraint(equalToConstant: 3),
+            chaseFill.leadingAnchor.constraint(equalTo: chaseBar.leadingAnchor),
+            chaseFill.topAnchor.constraint(equalTo: chaseBar.topAnchor),
+            chaseFill.bottomAnchor.constraint(equalTo: chaseBar.bottomAnchor),
+            fw,
+        ])
 
         root.addSubview(comboLabel)
         root.addSubview(chainLabel)
@@ -318,7 +349,7 @@ final class BattleHUD {
     private func toggleAuto() {
         guard let s = screen else { return }
         s.player.auto.toggle()
-        s.player.charging = false
+        s.resetTouches()
         autoBtn.configuration?.title = L(s.player.auto ? "battle.autoOn" : "battle.auto")
         autoBtn.tintColor = s.player.auto ? Theme.accent.withAlphaComponent(0.85) : Theme.smoke
         autoBtn.configuration?.baseForegroundColor = s.player.auto ? Theme.ink : .white
@@ -372,9 +403,24 @@ final class BattleHUD {
             energyText.text = "\(en)"
             energyRing.set(CGFloat(p.energy / Tune.energyMax))
         }
+        var anyChase = false
         for (i, cv) in cards.enumerated() {
             let card = p.hand[i]
             cv.show(card, affordable: card.map { p.energy >= Double($0.cost) } ?? false)
+            let st = s.cardStatus(p, i)
+            cv.setHint(chain: st.chain, chase: st.chase)
+            anyChase = anyChase || st.chase
+        }
+        // Remaining chase time (launch window, extended by a relay tag-in)
+        if anyChase {
+            let t = e.current
+            var end = t.launchedUntil
+            if s.isRelayChase(p), let r = s.validRelay(p) { end = max(end, r.deadline) }
+            let frac = CGFloat(max(0, min(1, (end - s.now) / Tune.launchWindow)))
+            chaseBar.isHidden = false
+            chaseFillWidth?.constant = chaseBar.bounds.width * frac
+        } else if !chaseBar.isHidden {
+            chaseBar.isHidden = true
         }
         if let n = pc.nextCard, n.id != lastNext {
             lastNext = n.id
@@ -396,6 +442,7 @@ final class BattleHUD {
             let c = p.team[i]
             v.isHidden = i == p.active
             v.update(hp: c.hpFraction, active: false, ko: c.isKO, cooldown: swapCD)
+            v.setRelay(s.relayEligible(p, i))
         }
         if p.active != lastActive {
             lastActive = p.active
@@ -455,6 +502,11 @@ final class BattleHUD {
         UIView.animate(withDuration: 0.12, animations: { l.transform = .identity }) { _ in
             UIView.animate(withDuration: 0.3, delay: 0.9, options: [.allowUserInteraction], animations: { l.alpha = 0 })
         }
+    }
+
+    func relayStarted() {
+        Haptics.rigid.impactOccurred()
+        flashEvade()
     }
 
     func flashEvade() {
@@ -709,6 +761,8 @@ final class PortraitView: UIView {
     private let ring = RingView(color: Theme.hp)
     private let veil = UIView()
     private let label = Glass.label("", size: 11, weight: .semibold, mono: true)
+    private let relayTag = UILabel()
+    private var relayOn = false
     private var lastKey = ""
 
     init(image: UIImage?, tint: UIColor, interactive: Bool, size: CGFloat) {
@@ -730,7 +784,16 @@ final class PortraitView: UIView {
         veil.translatesAutoresizingMaskIntoConstraints = false
         addSubview(veil)
         addSubview(label)
-        for v in [face, ring, veil, label] as [UIView] { v.isUserInteractionEnabled = false }
+        relayTag.text = " " + L("battle.relay") + " "
+        relayTag.font = Glass.font(9, .bold)
+        relayTag.textColor = Theme.ink
+        relayTag.backgroundColor = Theme.accent
+        relayTag.layer.cornerRadius = 7
+        relayTag.clipsToBounds = true
+        relayTag.isHidden = true
+        relayTag.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(relayTag)
+        for v in [face, ring, veil, label, relayTag] as [UIView] { v.isUserInteractionEnabled = false }
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: size),
             heightAnchor.constraint(equalToConstant: size),
@@ -748,6 +811,9 @@ final class PortraitView: UIView {
             ring.bottomAnchor.constraint(equalTo: bottomAnchor),
             label.centerXAnchor.constraint(equalTo: centerXAnchor),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            relayTag.centerXAnchor.constraint(equalTo: centerXAnchor),
+            relayTag.topAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            relayTag.heightAnchor.constraint(equalToConstant: 14),
         ])
         isUserInteractionEnabled = interactive
         if interactive {
@@ -762,12 +828,25 @@ final class PortraitView: UIView {
         onTap?()
     }
 
+    /// Relay-ready marker: one short pulse + text tag (shape and text, not color alone).
+    func setRelay(_ on: Bool) {
+        guard on != relayOn else { return }
+        relayOn = on
+        relayTag.isHidden = !on
+        ring.color = on ? Theme.accent : Theme.hp
+        if on {
+            UIView.animate(withDuration: 0.14, animations: { self.transform = CGAffineTransform(scaleX: 1.18, y: 1.18) }) { _ in
+                UIView.animate(withDuration: 0.16) { self.transform = .identity }
+            }
+        }
+    }
+
     func update(hp: CGFloat, active: Bool, ko: Bool, cooldown: Int) {
         let key = "\(Int(hp * 50))-\(active)-\(ko)-\(cooldown)"
         guard key != lastKey else { return }
         lastKey = key
         ring.set(hp)
-        ring.color = hp > 0.25 ? Theme.hp : Theme.hpEnemy
+        ring.color = relayOn ? Theme.accent : (hp > 0.25 ? Theme.hp : Theme.hpEnemy)
         alpha = active ? 1 : 0.8
         veil.isHidden = !(ko || cooldown > 0)
         label.text = ko ? "KO" : (cooldown > 0 ? "\(cooldown)" : "")

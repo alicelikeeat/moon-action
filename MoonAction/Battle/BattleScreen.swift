@@ -40,9 +40,16 @@ final class BattleScreen: Screen {
     var aiThinkMin: Double { max(0.35, 0.95 - Double(stage) * 0.03) }
     var aiDodgeChance: Double { min(0.5, 0.15 + Double(stage) * 0.017) }
 
+    /// Randomness seams (tests replace these with deterministic sources).
+    var roll: (Double) -> Bool = { chance($0) }
+    var damageVariance: () -> Double = { Double.random(in: 0.94...1.06) }
+
     // Touch tracking
-    var touchInfo: [UITouch: (start: CGPoint, time: Double)] = [:]
-    var chargeTouch: UITouch?
+    var gesture = ArenaGesture()
+    var liveTouches: [Int: UITouch] = [:]
+    #if DEBUG
+    var pendingGestureLog: (action: ArenaGesture.Action, cross: TimeInterval, accept: TimeInterval, accepted: Bool)?
+    #endif
 
     init(playerIDs: [String], enemyIDs: [String], enemyLevel: Int, stage: Int) {
         self.playerIDs = playerIDs
@@ -155,6 +162,9 @@ final class BattleScreen: Screen {
         updateFacing()
         applyCamera(dt: Float(rawDT))
         hud.update(dt: rawDT)
+        #if DEBUG
+        flushGestureLog()
+        #endif
     }
 
     func canAct(_ s: Side) -> Bool {
@@ -193,6 +203,7 @@ final class BattleScreen: Screen {
         c.model.setBarrier(barrier && !c.isKO)
         c.model.setPowered(now < c.powerUntil && !c.isKO)
         if now - s.lastHitTime > 1.4 { s.comboCount = 0 }
+        if s.relay != nil && validRelay(s) == nil { s.relay = nil }
         if now > s.chainOpenUntil + 0.6 && !c.busy { s.chain = 0 }
     }
 
@@ -319,48 +330,91 @@ final class BattleScreen: Screen {
 
     // MARK: - Input
 
+    private func touchID(_ t: UITouch) -> Int { ObjectIdentifier(t).hashValue }
+
+    private var acceptsGestures: Bool { started && !paused && !player.auto && !battleOver }
+
     override func touchesBegan(_ touches: Set<UITouch>, in view: UIView) {
-        for t in touches { touchInfo[t] = (t.location(in: view), now) }
+        guard acceptsGestures else { return }
+        for t in touches {
+            liveTouches[touchID(t)] = t
+            gesture.began(id: touchID(t), at: t.location(in: view), time: now)
+        }
     }
 
-    override func touchesMoved(_ touches: Set<UITouch>, in view: UIView) {}
+    override func touchesMoved(_ touches: Set<UITouch>, in view: UIView) {
+        for t in touches {
+            if let a = gesture.moved(id: touchID(t), to: t.location(in: view)) {
+                perform(a, crossedAt: t.timestamp)
+            }
+        }
+    }
 
     override func touchesEnded(_ touches: Set<UITouch>, in view: UIView) {
         for t in touches {
-            guard let info = touchInfo.removeValue(forKey: t) else { continue }
-            if t === chargeTouch {
-                chargeTouch = nil
-                player.charging = false
-                continue
+            let id = touchID(t)
+            liveTouches.removeValue(forKey: id)
+            if let a = gesture.ended(id: id, at: t.location(in: view)) {
+                perform(a, crossedAt: t.timestamp)
             }
-            guard !paused, !player.auto else { continue }
-            let end = t.location(in: view)
-            let dx = end.x - info.start.x
-            let dy = end.y - info.start.y
-            if hypot(dx, dy) < 30 {
-                doBasic(player)
-            } else if abs(dx) > abs(dy) {
-                dodge(player, lateral: dx > 0 ? 1 : -1)
-            } else if dy < 0 {
-                dashIn(player)
-            } else {
-                stepBack(player)
-            }
+        }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, in view: UIView) {
+        for t in touches {
+            let id = touchID(t)
+            liveTouches.removeValue(forKey: id)
+            if let a = gesture.cancelled(id: id) { perform(a, crossedAt: t.timestamp) }
         }
     }
 
     private func checkChargeTouch() {
-        guard chargeTouch == nil, !player.auto, let view = host?.view else { return }
-        for (t, info) in touchInfo {
-            let p = t.location(in: view)
-            if now - info.time > 0.22 && hypot(p.x - info.start.x, p.y - info.start.y) < 22 {
-                chargeTouch = t
-                player.charging = true
-                Sound.play(.charge)
-                break
-            }
+        guard acceptsGestures, let view = host?.view else { return }
+        if let a = gesture.tick(time: now, location: { [weak self] id in self?.liveTouches[id]?.location(in: view) }) {
+            perform(a, crossedAt: CACurrentMediaTime())
         }
     }
+
+    /// Clears all touch state (pause, AUTO toggle, system cancel, leaving the screen).
+    func resetTouches() {
+        gesture.reset()
+        liveTouches.removeAll()
+        if player != nil { player.charging = false }
+    }
+
+    private func perform(_ a: ArenaGesture.Action, crossedAt stamp: TimeInterval) {
+        guard acceptsGestures || a == .chargeEnd else { return }
+        var accepted = false
+        switch a {
+        case .evade(let lateral): accepted = dodge(player, lateral: lateral)
+        case .dash: accepted = dashIn(player)
+        case .stepBack: accepted = stepBack(player)
+        case .basic: accepted = doBasic(player)
+        case .chargeStart:
+            player.charging = true
+            Sound.play(.charge)
+            accepted = true
+        case .chargeEnd:
+            player.charging = false
+            accepted = true
+        }
+        #if DEBUG
+        let acceptT = CACurrentMediaTime()
+        pendingGestureLog = (a, stamp, acceptT, accepted)
+        #endif
+    }
+
+    #if DEBUG
+    /// Logged on the next frame: threshold crossing → accepted → first visible frame.
+    func flushGestureLog() {
+        guard let g = pendingGestureLog else { return }
+        pendingGestureLog = nil
+        let frameT = CACurrentMediaTime()
+        print(String(format: "[gesture] %@ accepted=%@ cross→accept %.1fms, accept→frame %.1fms",
+                     String(describing: g.action), g.accepted ? "Y" : "N",
+                     (g.accept - g.cross) * 1000, (frameT - g.accept) * 1000))
+    }
+    #endif
 
     // MARK: - Pause
 
@@ -368,12 +422,16 @@ final class BattleScreen: Screen {
         guard !battleOver, p != paused else { return }
         paused = p
         scene.isPaused = p
-        player.charging = false
+        resetTouches()
         if !p {
             hud.closePause()
             return
         }
         hud.openPause()
+    }
+
+    override func willDisappear() {
+        resetTouches()
     }
 
     func retreat() {

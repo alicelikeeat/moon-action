@@ -21,6 +21,7 @@ class Screen {
     func touchesBegan(_ touches: Set<UITouch>, in view: UIView) {}
     func touchesMoved(_ touches: Set<UITouch>, in view: UIView) {}
     func touchesEnded(_ touches: Set<UITouch>, in view: UIView) {}
+    func touchesCancelled(_ touches: Set<UITouch>, in view: UIView) { touchesEnded(touches, in: view) }
 
     func go(_ next: Screen) { host?.show(next) }
 
@@ -136,5 +137,5 @@ final class TouchLayer: UIView {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) { host?.current?.touchesBegan(touches, in: self) }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) { host?.current?.touchesMoved(touches, in: self) }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { host?.current?.touchesEnded(touches, in: self) }
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { host?.current?.touchesEnded(touches, in: self) }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { host?.current?.touchesCancelled(touches, in: self) }
 }

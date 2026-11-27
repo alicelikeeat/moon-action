@@ -80,6 +80,10 @@ final class CardView: UIControl {
     private let badge = UIView()
     private let cost = UILabel()
     private let dim = UIView()
+    private let hintBorder = UIView()
+    private let linkIcon = UIImageView(image: UIImage(systemName: "link", withConfiguration: UIImage.SymbolConfiguration(pointSize: 9, weight: .bold)))
+    private let chaseTag = UILabel()
+    private var hintKey = ""
     private(set) var card: Card?
     private var key = ""
     var onPlay: (() -> Void)?
@@ -123,7 +127,28 @@ final class CardView: UIControl {
         dim.layer.cornerRadius = 12
         addSubview(dim)
 
-        for v in [art, name, kind, badge, cost, dim] {
+        hintBorder.layer.cornerRadius = 12
+        hintBorder.layer.cornerCurve = .continuous
+        hintBorder.layer.borderWidth = 2
+        hintBorder.layer.borderColor = Theme.energy.cgColor
+        hintBorder.isHidden = true
+        addSubview(hintBorder)
+        linkIcon.tintColor = Theme.ink
+        linkIcon.backgroundColor = Theme.energy
+        linkIcon.contentMode = .center
+        linkIcon.layer.cornerRadius = 8
+        linkIcon.clipsToBounds = true
+        linkIcon.isHidden = true
+        addSubview(linkIcon)
+        chaseTag.font = Glass.font(9, .bold)
+        chaseTag.textColor = Theme.ink
+        chaseTag.backgroundColor = Theme.accent
+        chaseTag.textAlignment = .center
+        chaseTag.layer.cornerRadius = 7
+        chaseTag.clipsToBounds = true
+        chaseTag.isHidden = true
+        addSubview(chaseTag)
+        for v in [art, name, kind, badge, cost, dim, hintBorder, linkIcon, chaseTag] {
             v.isUserInteractionEnabled = false
             v.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -147,6 +172,18 @@ final class CardView: UIControl {
             badge.topAnchor.constraint(equalTo: topAnchor, constant: 7),
             cost.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
             cost.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
+            hintBorder.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -2),
+            hintBorder.trailingAnchor.constraint(equalTo: trailingAnchor, constant: 2),
+            hintBorder.topAnchor.constraint(equalTo: topAnchor, constant: -2),
+            hintBorder.bottomAnchor.constraint(equalTo: bottomAnchor, constant: 2),
+            linkIcon.widthAnchor.constraint(equalToConstant: 16),
+            linkIcon.heightAnchor.constraint(equalToConstant: 16),
+            linkIcon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
+            linkIcon.topAnchor.constraint(equalTo: topAnchor, constant: 7),
+            chaseTag.heightAnchor.constraint(equalToConstant: 14),
+            chaseTag.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
+            chaseTag.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            chaseTag.topAnchor.constraint(equalTo: topAnchor, constant: 8),
         ])
         addTarget(self, action: #selector(down), for: .touchDown)
         addTarget(self, action: #selector(up), for: [.touchUpInside, .touchUpOutside, .touchCancel])
@@ -215,6 +252,19 @@ final class CardView: UIControl {
                 self.transform = self.restTransform
             }
         }
+    }
+
+    /// Chain / chase hints. Chain = colored border + link glyph; chase = text tag (takes priority).
+    /// Both live on the right edge so the cost badge (top-left) stays readable.
+    func setHint(chain: Bool, chase: Bool) {
+        let k = "\(chain)|\(chase)"
+        guard k != hintKey else { return }
+        hintKey = k
+        hintBorder.isHidden = !(chain || chase)
+        hintBorder.layer.borderColor = (chase ? Theme.accent : Theme.energy).cgColor
+        chaseTag.isHidden = !chase
+        chaseTag.text = " " + L("card.chase") + " "
+        linkIcon.isHidden = !chain || chase
     }
 
     /// Resting transform (fan tilt), restored after draw animations.

@@ -16,6 +16,8 @@ enum Tune {
     static let arenaRadius: Float = 12
     static let blastSpeed: Float = 24
     static let shardsNeeded = 7
+    static let launchWindow = 0.75   // launch / chase window after a heavy launching hit
+    static let relayGrace = 0.45     // manual chase time guaranteed after a relay tag-in
     /// Start distances: near / mid / far
     static let startDistances: [Float] = [2.6, 6.2, 11.0]
     static let nearMax: Float = 3.6
@@ -102,6 +104,7 @@ final class Side {
     var swapReadyAt = 0.0
     var cardLanded = false
     var counterUntil = 0.0
+    var relay: Relay?
 
     var current: Combatant { team[active] }
     var allKO: Bool { team.allSatisfy { $0.isKO } }
@@ -114,6 +117,32 @@ final class Side {
     }
 
     func addSoul(_ v: Double) { soul = min(100, soul + v) }
+}
+
+/// Tag-in relay chase opened by a launching heavy hit.
+@MainActor
+final class Relay {
+    let target: Combatant          // the launched opponent
+    let launcher: Combatant        // our fighter that launched it
+    let launchUntil: Double        // base launch window end (0.75 s)
+    var deadline: Double           // effective chase deadline
+    var used = false               // the one relay swap has happened
+    var entrant: Combatant?        // fighter that tagged in for the chase
+    var closed = false
+
+    init(target: Combatant, launcher: Combatant, until: Double) {
+        self.target = target
+        self.launcher = launcher
+        launchUntil = until
+        deadline = until
+    }
+}
+
+/// What a hand card can do right now (shared by `playCard` and the HUD).
+struct CardStatus: Equatable {
+    var playable = false
+    var chain = false
+    var chase = false
 }
 
 @MainActor

@@ -76,7 +76,30 @@ jobs:
             -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild -clonedSourcePackagesDirPath spm \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -3
 
+      - name: Boot simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          c=[(rt,dev) for rt,devs in d.items() if "iOS" in rt for dev in devs if "iPhone" in dev["name"] and "Pro" in dev["name"] and "Max" not in dev["name"]]
+          c.sort(key=lambda x:x[0])
+          print(c[-1][1]["udid"])')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          for i in $(seq 1 60); do xcrun simctl list devices | grep "$UDID" | grep -q Booted && break; sleep 3; done
+          xcrun simctl list devices | grep "$UDID"
+
+      - name: Unit tests (simulator)
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
+          xcodebuild test -project MoonAction.xcodeproj -scheme MoonAction -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath testbuild -clonedSourcePackagesDirPath spm \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log | grep -E "Test Case .*(passed|failed)|error:|Executed|\*\* TEST" || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" test.log
+
       - name: Simulator screenshots
+        if: always()
         continue-on-error: true
         timeout-minutes: 15
         run: |
@@ -85,21 +108,7 @@ jobs:
           # run a command with a watchdog (seconds)
           wd() { local t=$1; shift; "$@" & local p=$!; ( sleep "$t"; kill -9 $p 2>/dev/null && echo "TIMEOUT: $*" ) & local w=$!; wait $p; local rc=$?; kill $w 2>/dev/null; return $rc; }
           xcrun simctl list runtimes
-          UDID=$(xcrun simctl list devices available -j | python3 -c '
-          import json,sys
-          d=json.load(sys.stdin)["devices"]
-          c=[(rt,dev) for rt,devs in d.items() if "iOS" in rt for dev in devs if "iPhone" in dev["name"] and "Pro" in dev["name"] and "Max" not in dev["name"]]
-          c.sort(key=lambda x:x[0])
-          print(c[-1][1]["udid"], c[-1][1]["name"], c[-1][0], file=sys.stderr)
-          print(c[-1][1]["udid"])')
-          log "boot $UDID"
-          wd 240 xcrun simctl boot "$UDID" || true
-          for i in $(seq 1 60); do
-            st=$(xcrun simctl list devices | grep "$UDID" || true)
-            echo "$st" | grep -q Booted && break
-            sleep 3
-          done
-          log "booted: $st"
+          log "using $UDID"
           sleep 20
           log "install"
           wd 120 xcrun simctl install "$UDID" simbuild/Build/Products/Debug-iphonesimulator/MoonAction.app
