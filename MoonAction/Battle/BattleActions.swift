@@ -349,7 +349,8 @@ extension BattleScreen {
         let right = simd_normalize(simd_cross(dir, SIMD3(0, 1, 0)))
         dir = simd_normalize(dir + right * spread)
         let n = VFX.projectile(color: a.def.aura, radius: radius)
-        VFX.muzzle(at: start, color: a.def.aura, size: CGFloat(radius * 7), in: fxRoot)
+        let near = camScale(start)
+        VFX.muzzle(at: start, color: a.def.aura, size: CGFloat(radius * 6) * near * near, in: fxRoot)
         VFX.muzzleSparks(at: start, dir: dir, color: a.def.aura, in: fxRoot)
         // Recoil: the shooter is pushed back a little, camera nudges when the player fires.
         let back = SCNAction.moveBy(x: 0, y: 0, z: CGFloat(-0.12 - radius * 0.3), duration: 0.05)
@@ -359,6 +360,9 @@ extension BattleScreen {
         a.model.body.runAction(.sequence([back, ret]), forKey: "recoil")
         if s.isPlayer { shake = max(shake, 0.02 + radius * 0.05) }
         n.simdPosition = start
+        // Grow in as it leaves the hand so the shooter's own shot never floods the over-shoulder camera.
+        n.scale = SCNVector3(0.25, 0.25, 0.25)
+        n.runAction(.scale(to: 1, duration: 0.16))
         fxRoot.addChildNode(n)
         let farBonus = RangeZone.of(dist(a, t)) == .far ? 1.1 : 1.0
         projectiles.append(Projectile(node: n, owner: s, pos: start, vel: dir * Tune.blastSpeed, radius: radius, power: power * farBonus))
@@ -392,7 +396,7 @@ extension BattleScreen {
                         applyHit(from: p.owner, power: p.power, stun: 0.45, knock: 2.5, heavy: false, aiDodge: 0,
                                  source: SIMD2(p.pos.x - p.vel.x, p.pos.z - p.vel.z))
                         VFX.impact(at: p.pos, color: p.owner.current.def.aura, heavy: p.radius >= 0.3, in: fxRoot,
-                                   dir: simd_normalize(p.vel))
+                                   dir: simd_normalize(p.vel), scale: camScale(p.pos))
                     }
                 }
             }
@@ -803,7 +807,7 @@ extension BattleScreen {
         kickCamera(from: a.world3, to: t.world3, strength: heavy ? 0.32 : (basic ? 0.07 : 0.12))
         shake = max(shake, heavy ? 0.1 : 0.025)
         if heavy || crit { fovKick = max(-6, fovKick - (heavy ? 4 : 2)) }
-        if heavy { hud.screenFlash(UIColor(white: 1, alpha: 0.5)) }
+        if heavy && !o.isPlayer { hud.screenFlash(UIColor(white: 1, alpha: 0.5)) }
         Sound.play(heavy || crit ? .heavy : .hit)
         if heavy && !basic { Sound.play(.hit) }
         if s.isPlayer || o.isPlayer {
