@@ -30,3 +30,30 @@ final class CoreBattleSmokeTests: XCTestCase {
         }
     }
 }
+
+/// Progression hub, loadout battles with a UL lead (intro), results.
+@MainActor
+final class ProgressionSmokeTests: XCTestCase {
+    func testLoadoutBattleWithULIntroRuns() {
+        let p = [FighterLoadout(def: FighterRoster.kross), FighterLoadout(def: FighterRoster.kai), FighterLoadout(def: FighterRoster.lan)]
+        let e = [FighterLoadout(def: FighterRoster.nova, level: 100, stars: 1)]
+        let b = CoreBattleScreen(playerLoadouts: p, enemyLoadouts: e, difficulty: .novice, seed: 4, progression: false)
+        b.ui.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        b.build()
+        for _ in 0..<(60 * 4) { b.update(dt: 1.0 / 60) }   // 2.5 s intro, then the fight
+        b.setAuto(true)
+        for _ in 0..<(60 * 20) { b.update(dt: 1.0 / 60) }
+        XCTAssertGreaterThan(b.engineState.time, 5)
+    }
+
+    func testHubAndResultBuild() {
+        let hub = ProgressionScreen()
+        hub.ui.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        hub.build()
+        let before = CoreSave.shared.data.materials.expBooks
+        let r = CoreResultScreen(won: true, legendary: true, damage: 100)
+        r.ui.frame = hub.ui.frame
+        r.build()
+        XCTAssertEqual(CoreSave.shared.data.materials.expBooks, before + 300, "victory rewards saved")
+    }
+}

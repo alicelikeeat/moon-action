@@ -189,6 +189,9 @@ jobs:
           run cheats;   sleep 6;  shot 17-cheats
           run creator;  sleep 6;  shot 18-creator
           run core;     sleep 5;  shot 19-core-a; sleep 3; shot 20-core-b; sleep 3; shot 21-core-c; sleep 4; shot 22-core-d
+          run hub;      sleep 6;  shot 23-hub
+          run ul;       sleep 2.2; shot 24-ul-intro; sleep 3; shot 25-ul-fight
+          run coreresult; sleep 5; shot 26-core-result
           ls -la shots
 
       - name: Crash reports

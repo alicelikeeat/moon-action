@@ -102,6 +102,9 @@ enum Demo {
         case "viewer": return ViewerScreen(focus: "luna")
         case "creator": return CreatorScreen()
         case "core": return CoreBattleScreen(seed: 7)
+        case "hub": return ProgressionScreen()
+        case "ul": return CoreBattleScreen(player: ["kross", "kai", "lan"], enemy: ["nova", "sephi", "sera"], seed: 9)
+        case "coreresult": return CoreResultScreen(won: true, legendary: true, damage: 4_812_345)
         case "cheats": return HomeScreen()
         case "battle", "ultimate", "special":
             let ids = ["aria", "kai", "luna"]
