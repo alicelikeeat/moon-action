@@ -47,7 +47,7 @@ enum L10n {
         "help.7": ("Chain cards and keep hitting to build combos. Strikes during knockback CHASE with a teleport.", "连续出牌形成卡牌连携；对手被击飞时出拳卡会瞬移追击。"),
         "help.8": ("Swipe ←/→ to teleport-evade. Evade just before a hit for a PERFECT evade and counter.", "左右滑动瞬移闪避；在受击前一瞬闪避触发「完美闪避」并可反击。"),
         "help.9": ("Tap arena: basic attack · Swipe ↑: dash · ↓: step back · Hold: charge.", "点击场地：普通攻击 · 上滑：冲刺 · 下滑：后撤 · 长按：蓄力"),
-        "help.10": ("Battles start at NEAR, MID or FAR range. Collect 7 moon shards for ECLIPSE RUSH.", "战斗以近/中/远三种距离开始。集齐 7 枚月之碎片发动「月蚀突袭」。"),
+        "help.10": ("Battles start at MID range; close in or back off to fight NEAR or FAR. Collect 7 moon shards for ECLIPSE RUSH.", "战斗开始时双方处于中距离，可冲刺拉近或后撤拉远。集齐 7 枚月之碎片发动「月蚀突袭」。"),
         "ok": ("Got it", "知道了"),
         "home.viewer": ("Gallery", "模型鉴赏"),
         "style.boxer": ("Boxer", "拳击流"),

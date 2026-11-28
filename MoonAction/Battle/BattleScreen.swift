@@ -84,7 +84,8 @@ final class BattleScreen: Screen {
         let et = enemyIDs.map { Combatant(def: Roster.byID($0), level: enemyLevel) }
         player = Side(isPlayer: true, team: pt)
         enemy = Side(isPlayer: false, team: et)
-        startZone = Demo.mode != nil ? .mid : RangeZone(rawValue: Int.random(in: 0...2)) ?? .mid
+        // Every battle opens at mid range (DBL-style).
+        startZone = .mid
         let d = Tune.startDistances[startZone.rawValue]
         place(player.current, at: SIMD2(0, -d / 2))
         place(enemy.current, at: SIMD2(0, d / 2))
