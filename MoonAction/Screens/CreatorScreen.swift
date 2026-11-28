@@ -47,7 +47,7 @@ final class CreatorScreen: Screen {
             self.spec.name = "Demo"
             tab = 1
             tabControl.selectedSegmentIndex = 1
-            tZoom = 0.85
+            tZoom = 1
             tYaw = 0.3
             showTab()
         }
@@ -82,11 +82,12 @@ final class CreatorScreen: Screen {
         zoom += (tZoom - zoom) * k
         // Focus point: body center (zoom 0) up to the face (zoom 1). The aim is pushed below the focus so
         // the focus lands in the open area above the editing panel (upper ~58% of the screen).
-        let h = 2.21 * spec.height
-        let focus = h * (0.5 + 0.42 * zoom)
-        let dist: Float = 4.3 - 3.45 * zoom
+        // Body center ≈ 1.15 h, head center ≈ 2.04 h (+ pedestal); h = height multiplier.
+        let h = spec.height
+        let focus = 0.06 + h * (1.15 + 0.92 * zoom)
+        let dist: Float = 4.3 - 3.2 * zoom
         let halfH = dist * tan(29 * Float.pi / 180)
-        let target = SIMD3<Float>(0, focus - halfH * 0.42, 0)
+        let target = SIMD3<Float>(0, focus - halfH * 0.36, 0)
         arena.camera.simdPosition = target + SIMD3(sin(yaw) * dist, 0.15 * (1 - zoom), cos(yaw) * dist)
         arena.camera.simdLook(at: target, up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
     }
