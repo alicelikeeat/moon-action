@@ -56,6 +56,8 @@ public struct SideState: Sendable {
     public internal(set) var comboCards = 0
     public internal(set) var comboHits = 0
     public internal(set) var fastDrawUntil: Double = 0
+    /// A special cover change was used during the opponent's current combo.
+    public internal(set) var specialCoverUsed = false
 
     public var current: FighterState {
         get { team[active] }
@@ -76,6 +78,7 @@ public enum Input: Sendable, Equatable {
     case chargeBegin      // long press began
     case chargeEnd        // long press ended
     case play(Int)        // hand slot 0…3
+    case switchTo(Int)    // team member index (tag switch / cover change while being hit)
 }
 
 public enum HitKind: Sendable, Equatable { case basic, strike, blast, special, ultimate }
@@ -114,6 +117,8 @@ public enum BattleEvent: Sendable, Equatable {
     case handChanged(side: Int)
     case comboEnded(side: Int, hits: Int)
     case cinematic(side: Int, card: ArtsCard)
+    /// Manual tag switch. `cover`: switched in while being comboed; `special`: matching cover tag knocked the attacker away.
+    case tagged(side: Int, to: Int, cover: Bool, special: Bool)
 }
 
 /// Deterministic fixed-step battle simulation. Side 0 = player, side 1 = enemy.
@@ -218,6 +223,7 @@ public struct BattleEngine: Sendable {
             let d = sides[1 - s].current
             if d.phase != .stunned && d.phase != .ko {
                 events.append(.comboEnded(side: s, hits: sides[s].comboHits))
+                sides[1 - s].specialCoverUsed = false
                 sides[s].comboCards = 0
                 sides[s].comboHits = 0
             }
@@ -262,6 +268,8 @@ public struct BattleEngine: Sendable {
             return basicAttack(s, &events)
         case .play(let slot):
             return playCard(s, slot: slot, &events)
+        case .switchTo(let i):
+            return switchFighter(s, to: i, &events)
         }
         sides[s].current = f
         return true

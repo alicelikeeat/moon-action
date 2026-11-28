@@ -116,7 +116,7 @@ final class SummonScreen: Screen {
 
     private func reveal(_ def: FighterDef, isNew: Bool) {
         Sound.play(def.rarity == 3 ? .ultimate : .explode)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Haptics.success()
         SCNNode.emit(Toon.burst(def.look.aura, count: 120, speed: 8, size: 0.35, life: 0.6), at: SIMD3(0, 1.6, 0), in: arena.world)
         let flash = UIView(frame: ui.bounds)
         flash.backgroundColor = UIColor.white.withAlphaComponent(0.7)

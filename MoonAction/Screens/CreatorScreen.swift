@@ -315,7 +315,7 @@ final class CreatorScreen: Screen {
             s.data.team = Array(s.data.team.prefix(3))
             s.persist()
         }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Haptics.success()
         model?.victory()
         realDelay(0.7) { [weak self] in self?.go(TeamScreen()) }
     }
@@ -401,7 +401,7 @@ final class CreatorScreen: Screen {
             d.addAction(UIAction { [weak self] _ in
                 set(hex)
                 mark(hex)
-                UISelectionFeedbackGenerator().selectionChanged()
+                Haptics.select()
                 self?.changed()
             }, for: .touchUpInside)
             dots.append(d)

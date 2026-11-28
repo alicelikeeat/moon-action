@@ -76,6 +76,16 @@ public struct AIController: Sendable {
         } else {
             decidedThreat = false
         }
+        // Tag out when low on HP: cover change while being comboed, or a normal switch in neutral.
+        if me.hp < me.def.maxHP * 0.35, let mate = bestTeammate(e) {
+            let comboed = me.phase == .stunned
+            if (comboed && e.rng.chance(difficulty == .challenge ? 0.04 : 0.015)) || (me.canAct && e.time >= nextThink && e.rng.chance(0.5)) {
+                if e.apply(.switchTo(mate), side: side, events: &events) {
+                    nextThink = e.time + 0.6
+                    return
+                }
+            }
+        }
         if let at = vanishAt, e.time >= at {
             vanishAt = nil
             e.apply(.sidestep(e.rng.chance(0.5) ? 1 : -1), side: side, events: &events)
@@ -108,6 +118,19 @@ public struct AIController: Sendable {
         } else {
             e.apply(.tap, side: side, events: &events)
         }
+    }
+
+    /// Healthiest teammate that can be tagged in right now (prefers element advantage).
+    func bestTeammate(_ e: BattleEngine) -> Int? {
+        let foe = e.sides[1 - side].current.def.element
+        var best: (Int, Double)?
+        for i in e.sides[side].team.indices where e.canSwitch(side: side, to: i) {
+            let f = e.sides[side].team[i]
+            var score = f.hp / f.def.maxHP
+            if Element.matchup(attacker: f.def.element, defender: foe) == .advantage { score += 0.3 }
+            if best == nil || score > best!.1 { best = (i, score) }
+        }
+        return best?.0
     }
 
     /// Utility score of each playable card for the current situation.

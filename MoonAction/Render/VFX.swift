@@ -162,28 +162,29 @@ enum VFX {
         return p
     }
 
+    /// Power-up aura: thin bright streaks rising fast along the body (flame-shaped shell), not blobs.
     static func auraSystem(_ color: UIColor) -> SCNParticleSystem {
         let p = SCNParticleSystem()
-        p.particleImage = flame
+        p.particleImage = Toon.sparkImage
         p.birthRate = 0
-        p.emitterShape = SCNCylinder(radius: 0.38, height: 1.7)
-        p.birthLocation = .volume
-        p.particleLifeSpan = 0.5
-        p.particleLifeSpanVariation = 0.15
-        p.particleVelocity = 2.0
-        p.particleVelocityVariation = 0.8
+        p.emitterShape = SCNCylinder(radius: 0.4, height: 1.4)
+        p.birthLocation = .surface
+        p.particleLifeSpan = 0.32
+        p.particleLifeSpanVariation = 0.1
+        p.particleVelocity = 3.4
+        p.particleVelocityVariation = 1.2
         p.emittingDirection = SCNVector3(0, 1, 0)
-        p.spreadingAngle = 8
-        p.particleSize = 0.13
-        p.particleSizeVariation = 0.05
+        p.spreadingAngle = 5
+        p.particleSize = 0.06
+        p.particleSizeVariation = 0.02
+        p.stretchFactor = 0.1
         p.blendMode = .additive
         p.isLightingEnabled = false
-        p.acceleration = SCNVector3(0, 2.5, 0)
-        p.orientationMode = .billboardViewAligned
+        p.acceleration = SCNVector3(0, 4, 0)
         p.propertyControllers = [
-            .color: colorRamp([color.lighter(0.5), color, color.darker(0.2)], [0, 0.4, 1]),
-            .opacity: ramp([0, 0.55, 0.35, 0], [0, 0.15, 0.6, 1]),
-            .size: ramp([0.6, 1.0, 0.4], [0, 0.4, 1]),
+            .color: colorRamp([.white, color.lighter(0.3), color], [0, 0.3, 1]),
+            .opacity: ramp([0, 0.85, 0], [0, 0.25, 1]),
+            .size: ramp([1, 0.5], [0, 1]),
         ]
         return p
     }

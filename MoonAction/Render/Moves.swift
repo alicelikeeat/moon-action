@@ -147,10 +147,17 @@ enum Moves {
     // MARK: Ki
 
     /// Powering up: wide stance, fists clenched low, trembling.
+    /// Powering up: settle into the stance, tremble, and surge (chest up, fists down) every ~0.6 s.
     static let charge = Clip(name: "charge", keys: [
-        Key(0.15, FighterModel.chargePose, body: SIMD3(0, -0.06, 0)),
-        Key(0.2, P([(.spine, 0.24, 0, 0.02), (.head, -0.3, 0, 0)]), body: SIMD3(0.01, -0.07, 0), ease: .linear),
-        Key(0.25, P([(.spine, 0.2, 0, -0.02), (.head, -0.25, 0, 0)]), body: SIMD3(-0.01, -0.06, 0), ease: .linear),
+        Key(0.12, FighterModel.chargePose, body: SIMD3(0, -0.12, 0)),
+        Key(0.17, P([(.spine, -0.1, 0, 0.015)]), body: SIMD3(0.008, -0.12, 0), ease: .linear),
+        Key(0.22, P([(.spine, -0.13, 0, -0.015)]), body: SIMD3(-0.008, -0.12, 0), ease: .linear),
+        Key(0.27, P([(.spine, -0.1, 0, 0.015)]), body: SIMD3(0.008, -0.12, 0), ease: .linear),
+        Key(0.36, P([(.spine, -0.3, 0, 0), (.head, -0.2, 0, 0), (.shoulderL, 0.45, 0, 0.5), (.shoulderR, 0.45, 0, -0.5),
+                     (.elbowL, -1.15, 0, 0), (.elbowR, -1.15, 0, 0)]), body: SIMD3(0, -0.08, 0), ease: .out),
+        Key(0.5, P([(.spine, -0.15, 0, 0), (.head, 0.05, 0, 0), (.shoulderL, 0.25, 0, 0.42), (.shoulderR, 0.25, 0, -0.42),
+                    (.elbowL, -1.35, 0, 0), (.elbowR, -1.35, 0, 0)]), body: SIMD3(0, -0.12, 0), ease: .inOut),
+        Key(0.6, P([(.spine, -0.12, 0, 0)]), body: SIMD3(0, -0.12, 0), ease: .linear),
     ], loop: true)
 
     static let beamCharge = Clip(name: "beamCharge", keys: [Key(0.15, FighterModel.beamChargePose, body: SIMD3(0, -0.06, -0.04))], hold: true)

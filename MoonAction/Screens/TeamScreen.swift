@@ -231,7 +231,7 @@ final class TeamScreen: Screen {
             selected[2] = id
         }
         Sound.play(.card)
-        UISelectionFeedbackGenerator().selectionChanged()
+        Haptics.select()
         refresh()
     }
 

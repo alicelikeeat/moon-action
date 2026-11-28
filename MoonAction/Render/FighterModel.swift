@@ -27,6 +27,16 @@ final class FighterModel {
     private var powerGlow: SCNNode?
     private var materials: [SCNMaterial] = []
     private var currentAura = -1
+    /// Pulsing glow ring on the ground while powering up.
+    private lazy var auraGround: SCNNode = {
+        let n = Toon.glowSprite(def.look.aura, size: 2.0)
+        n.constraints = nil
+        n.simdEulerAngles = SIMD3(-.pi / 2, 0, 0)
+        n.simdPosition = SIMD3(0, 0.03, 0)
+        n.opacity = 0
+        root.addChildNode(n)
+        return n
+    }()
     private lazy var sparks: SCNParticleSystem = VFX.chargeSparks(def.look.aura)
     private var rng: UInt64
     private var retarget: Retargeter?
@@ -492,12 +502,13 @@ final class FighterModel {
         .hipR: SIMD3(0.8, 0, -0.05), .kneeR: SIMD3(1.2, 0, 0),
     ]
 
+    /// Power-up stance: wide low base, fists clenched at the hips, chest out.
     static let chargePose: Pose = [
-        .spine: SIMD3(0.2, 0, 0), .head: SIMD3(-0.25, 0, 0),
-        .shoulderL: SIMD3(0.15, 0, 0.45), .elbowL: SIMD3(-0.5, 0, 0),
-        .shoulderR: SIMD3(0.15, 0, -0.45), .elbowR: SIMD3(-0.5, 0, 0),
-        .hipL: SIMD3(-0.3, 0, 0.2), .kneeL: SIMD3(0.6, 0, 0),
-        .hipR: SIMD3(-0.3, 0, -0.2), .kneeR: SIMD3(0.6, 0, 0),
+        .spine: SIMD3(-0.12, 0, 0), .head: SIMD3(0.05, 0, 0),
+        .shoulderL: SIMD3(0.25, 0, 0.42), .elbowL: SIMD3(-1.35, 0, 0),
+        .shoulderR: SIMD3(0.25, 0, -0.42), .elbowR: SIMD3(-1.35, 0, 0),
+        .hipL: SIMD3(-0.35, 0, 0.42), .kneeL: SIMD3(0.75, 0, 0),
+        .hipR: SIMD3(-0.35, 0, -0.42), .kneeR: SIMD3(0.75, 0, 0),
     ]
 
     static let beamChargePose: Pose = [
@@ -655,8 +666,20 @@ final class FighterModel {
         guard level != currentAura else { return }
         currentAura = level
         let l = max(0, min(3, level))
-        aura.birthRate = [0, 0, 55, 80][l]
-        sparks.birthRate = [0, 0, 20, 30][l]
+        aura.birthRate = [0, 0, 150, 230][l]
+        sparks.birthRate = [0, 0, 14, 24][l]
+        let g = auraGround
+        g.removeAllActions()
+        if l >= 2 {
+            g.runAction(.fadeOpacity(to: 0.55, duration: 0.15))
+            let up = SCNAction.scale(to: 1.15, duration: 0.3)
+            up.timingMode = .easeInEaseOut
+            let down = SCNAction.scale(to: 0.9, duration: 0.3)
+            down.timingMode = .easeInEaseOut
+            g.runAction(.repeatForever(.sequence([up, down])), forKey: "pulse")
+        } else {
+            g.runAction(.fadeOpacity(to: 0, duration: 0.25))
+        }
     }
 
     func flash() {

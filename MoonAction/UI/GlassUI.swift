@@ -112,7 +112,7 @@ enum Glass {
         if let action {
             b.addAction(UIAction { _ in
                 Sound.play(.ui)
-                UISelectionFeedbackGenerator().selectionChanged()
+                Haptics.select()
                 action()
             }, for: .touchUpInside)
         }

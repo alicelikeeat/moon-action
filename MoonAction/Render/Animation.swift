@@ -174,7 +174,11 @@ final class Animator {
         } else if let c = clip {
             t += dt
             let total = c.keys.last?.t ?? 0
-            if c.loop && t > total { t = t.truncatingRemainder(dividingBy: max(total, 0.01)) }
+            // Loops cycle between their first and last key (the blend-in from the previous pose plays once).
+            if c.loop && t > total {
+                let first = c.keys.first?.t ?? 0
+                t = first + (t - total).truncatingRemainder(dividingBy: max(total - first, 0.01))
+            }
             for (j, tr) in tracks { cur[j] = sample(tr, t) }
             if let b = bodyTrack { curBody = sample(b, t) }
             if let r = rotTrack { curRot = sample(r, t) }

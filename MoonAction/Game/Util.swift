@@ -48,12 +48,32 @@ func lerp(_ a: Float, _ b: Float, _ t: Float) -> Float { a + (b - a) * t }
 func easeOut(_ t: Float) -> Float { 1 - (1 - t) * (1 - t) }
 
 @MainActor
+/// All vibration goes through here so it can be turned off in settings.
+@MainActor
 enum Haptics {
-    static let light = UIImpactFeedbackGenerator(style: .light)
-    static let heavy = UIImpactFeedbackGenerator(style: .heavy)
-    static let rigid = UIImpactFeedbackGenerator(style: .rigid)
+    private static let key = "moonaction.haptics"
+    static var enabled: Bool {
+        get { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+
+    /// Impact generator that respects the setting.
+    final class Gen {
+        private let g: UIImpactFeedbackGenerator
+        init(_ style: UIImpactFeedbackGenerator.FeedbackStyle) { g = UIImpactFeedbackGenerator(style: style) }
+        func impactOccurred() { if Haptics.enabled { g.impactOccurred() } }
+        func impactOccurred(intensity: CGFloat) { if Haptics.enabled { g.impactOccurred(intensity: intensity) } }
+        func prepare() { if Haptics.enabled { g.prepare() } }
+    }
+
+    static let light = Gen(.light)
+    static let medium = Gen(.medium)
+    static let heavy = Gen(.heavy)
+    static let rigid = Gen(.rigid)
 
     static func hit(_ big: Bool) { (big ? heavy : light).impactOccurred() }
+    static func select() { if enabled { UISelectionFeedbackGenerator().selectionChanged() } }
+    static func success() { if enabled { UINotificationFeedbackGenerator().notificationOccurred(.success) } }
 }
 
 /// Main-thread scheduler driven by game time (pauses with the game).

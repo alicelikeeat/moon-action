@@ -214,7 +214,7 @@ final class HomeScreen: Screen {
                 sw.accessibilityLabel = key.title
                 sw.addAction(UIAction { [weak sw] _ in
                     Cheats.set(key, sw?.isOn ?? false)
-                    UISelectionFeedbackGenerator().selectionChanged()
+                    Haptics.select()
                 }, for: .valueChanged)
                 let row = UIStackView(arrangedSubviews: [icon, text, sw])
                 row.spacing = 10
@@ -234,7 +234,7 @@ final class HomeScreen: Screen {
                 b = Glass.button(L(key), symbol: sym, style: .secondary, fontSize: 13) {
                     fn()
                     Glass.setTitle(b, L(key) + " · " + L("cheat.applied"))
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    Haptics.success()
                 }
                 b.heightAnchor.constraint(equalToConstant: 38).isActive = true
                 grid.addArrangedSubview(b)
