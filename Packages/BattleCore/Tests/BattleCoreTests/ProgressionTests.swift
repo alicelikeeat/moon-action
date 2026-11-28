@@ -109,6 +109,6 @@ final class ProgressionTests: XCTestCase {
         let e = [FighterLoadout(def: FighterRoster.nova, level: 1, stars: 1)]
         let b = BattleEngine(player: p, enemy: e)
         XCTAssertGreaterThan(b.sides[0].current.maxHP, FighterRoster.kross.benchmark.hp, "Z + leader bonuses apply")
-        XCTAssertLessThan(b.sides[1].current.maxHP, FighterRoster.nova.benchmark.hp / 10)
+        XCTAssertLessThan(b.sides[1].current.maxHP, FighterRoster.nova.benchmark.hp / 8, "Lv.1 / 1★ ≈ benchmark ÷ 11.8 (× Z 1.18)")
     }
 }
