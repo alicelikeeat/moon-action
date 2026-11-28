@@ -683,11 +683,12 @@ final class CoreBattleScreen: Screen {
     private func updateIntro(dt: Double) {
         let t = Float(2.5 - introLeft) / 2.5
         let p = worldPos(0)
-        let a = Float.pi * (1.1 - 1.3 * t)
-        let r: Float = 3.2 - 1.0 * t
-        arena.camera.simdPosition = p + SIMD3(sin(a) * r, 0.7 + 1.0 * t, cos(a) * r)
-        arena.camera.simdLook(at: p + SIMD3(0, 1.2, 0), up: SIMD3(0, 1, 0), localFront: SIMD3(0, 0, -1))
-        arena.camera.camera?.fieldOfView = 40
+        // Start in front of the fighter (facing +z toward the opponent), sweep round to the over-the-shoulder side.
+        let a = Float.pi * (0.15 + 0.85 * t)
+        let r: Float = 3.8 - 0.8 * t
+        arena.camera.simdPosition = p + SIMD3(-sin(a) * r, 1.3 + 0.4 * t, cos(a) * r)
+        arena.camera.simdLook(at: model(0).chestWorld, up: SIMD3(0, 1, 0), localFront: SIMD3(0, 0, -1))
+        arena.camera.camera?.fieldOfView = 44
         placeModels(dt: Float(dt))
         if introLeft <= 0 { snapCamera() }
     }
@@ -944,7 +945,7 @@ final class CoreBattleScreen: Screen {
             }
         }
         return .init(player: worldPos(0), enemy: worldPos(1), gap: visualGap, comboW: comboW, guardW: guardW,
-                     closeUpSide: closeUp, closeUpChest: chest, now: engine.time)
+                     closeUpSide: closeUp, closeUpChest: chest, now: engine.time, playerScale: model(0).def.look.height)
     }
 
     private func snapCamera() {

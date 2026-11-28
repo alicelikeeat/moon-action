@@ -17,6 +17,8 @@ final class BattleCameraController {
         var closeUpSide: Int?
         var closeUpChest: SIMD3<Float>
         var now: Double
+        /// Player model scale (look height): bigger fighters push the camera back so they never fill the screen.
+        var playerScale: Float = 1
     }
 
     private(set) var pos = SIMD3<Float>(0, 3, -9)
@@ -128,12 +130,13 @@ final class BattleCameraController {
         // aimed at the line between the fighters 60 % of the way to the opponent.
         let mid = (p + e) / 2
         let aim = p + (e - p) * 0.6
-        var pos = p - f * (2.2 + gap * 0.06) - right * 0.95 + SIMD3(0, 1.6, 0)
+        let k = max(1, c.playerScale) * 1.08
+        var pos = p - f * (2.5 + gap * 0.06) * k - right * 0.95 * k + SIMD3(0, 1.6 * k, 0)
         var look = aim - right * 0.25 + SIMD3(0, 1.2, 0)
         var fov = FOV.neutral
         // Forward dash / rush: lower (y 1.4), a bit closer, wide angle.
         if isDashing {
-            pos = p - f * 1.9 - right * 0.85 + SIMD3(0, 1.4, 0)
+            pos = p - f * 2.2 * k - right * 0.85 * k + SIMD3(0, 1.4 * k, 0)
             fov = FOV.dash
         }
         // Comboing: swing to the 3/4 side and close in on the exchange.
