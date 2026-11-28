@@ -12,8 +12,10 @@ public struct StatBlock: Sendable, Equatable, Codable {
         self.defense = defense
     }
 
-    public static func * (s: StatBlock, k: Double) -> StatBlock {
-        StatBlock(hp: s.hp * k, strikeAtk: s.strikeAtk * k, blastAtk: s.blastAtk * k, defense: s.defense * k)
+    public static func * (s: StatBlock, k: Double) -> StatBlock { s.scaled(k) }
+
+    public func scaled(_ k: Double) -> StatBlock {
+        StatBlock(hp: hp * k, strikeAtk: strikeAtk * k, blastAtk: blastAtk * k, defense: defense * k)
     }
 }
 

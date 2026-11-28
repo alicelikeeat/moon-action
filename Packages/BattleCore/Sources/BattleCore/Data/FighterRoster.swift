@@ -60,7 +60,7 @@ public struct FighterDef: Sendable, Equatable, Identifiable {
     }
 
     /// Lv.1 / 1★ base stats: benchmark ÷ (level factor 10 × star factor 1.18).
-    public var baseLv1: StatBlock { benchmark * (1 / (Progression.levelFactor(5000) * Progression.starFactor(7))) }
+    public var baseLv1: StatBlock { benchmark.scaled(1 / (Progression.levelFactor(5000) * Progression.starFactor(7))) }
 
     /// Benchmark HP (Lv.5000 / 7★) — convenience for UI and tests.
     public var maxHP: Double { benchmark.hp }

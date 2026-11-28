@@ -34,7 +34,8 @@ public enum Progression {
 
     /// Base stats at a level and star count (no Z ability / equipment).
     public static func baseStats(_ def: FighterDef, level: Int, stars: Int) -> StatBlock {
-        def.baseLv1 * (levelFactor(level) * starFactor(stars))
+        let k: Double = levelFactor(level) * starFactor(stars)
+        return def.baseLv1.scaled(k)
     }
 
     /// Equipment slots unlocked: 1, a 2nd at Lv.1000, a 3rd at Lv.3000.
