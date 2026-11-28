@@ -82,16 +82,16 @@ jobs:
 
       - name: Release notes
         run: |
-          PREV=$(git tag --list 'v*' --sort=-v:refname | grep -vx "v$APP_VERSION" | head -1 || true)
+          BEFORE="${{ github.event.before }}"
           {
             echo "## Moon Action $APP_VERSION（build $APP_BUILD）"
             echo
             echo "### 更新说明"
             if [ -f RELEASE_NOTES.md ]; then grep -v '^<!--' RELEASE_NOTES.md; else echo "- 常规更新"; fi
             echo
-            if [ -n "$PREV" ]; then
-              echo "### 自 $PREV 以来的全部提交"
-              git log --no-merges --pretty='- %s（%h）' "$PREV"..HEAD
+            if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              echo "### 本次包含的提交"
+              git log --no-merges --pretty='- %s（%h）' "$BEFORE"..HEAD
             else
               echo "### 最近的提交"
               git log --no-merges -n 20 --pretty='- %s（%h）'
@@ -105,11 +105,23 @@ jobs:
           cat release_notes.md
 
       - name: Publish GitHub Release
+        id: publish
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.APP_VERSION }}
           name: Moon Action ${{ env.APP_VERSION }} · unsigned IPA
           target_commitish: ${{ github.sha }}
+          files: ${{ env.IPA_NAME }}
+          body_path: release_notes.md
+
+      # The CI token may not create a tag on a commit that adds workflow files (403); publish anyway.
+      - name: Publish GitHub Release (fallback)
+        if: steps.publish.outcome == 'failure'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: Moon Action ${{ env.APP_VERSION }} · unsigned IPA
           files: ${{ env.IPA_NAME }}
           body_path: release_notes.md
 
