@@ -315,7 +315,7 @@ extension BattleEngine {
             if t.isKO || time < t.invulnUntil || t.phase == .vanishing { continue }
             if let act = t.action, t.phase == .acting {
                 // Super-armored strikes plow through blasts; any card attack shrugs off basic shots.
-                if act.kind == .strike && act.armor && time < act.dashUntil + 0.05 {
+                if act.kind == .strike && act.armor && act.done == 0 {
                     events.append(.armorBreak(side: sh.target))
                     continue
                 }
