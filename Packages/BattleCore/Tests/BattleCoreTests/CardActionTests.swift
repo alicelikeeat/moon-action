@@ -72,7 +72,7 @@ final class CardActionTests: XCTestCase {
         XCTAssertTrue(b.apply(.play(0), side: 0, events: &ev))
         XCTAssertTrue(ev.contains { if case .dash = $0 { return true }; return false })
         ev = run(&b, 0.75)                             // dash in from mid range (6.5 m) then 3 hits
-        XCTAssertEqual(b.zone, .close)
+        XCTAssertTrue(ev.contains(.zoneChanged(.close)), "dashed in to close range (the last hit knocks back)")
         XCTAssertEqual(hits(ev, by: 0).count, 3)
         XCTAssertEqual(b.sides[1].current.phase, .stunned)
         // Locked: no vanish, cards or movement while being hit.
