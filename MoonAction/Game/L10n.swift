@@ -50,6 +50,7 @@ enum L10n {
         "help.10": ("Battles start at MID range; close in or back off to fight NEAR or FAR. Collect 7 moon shards for ECLIPSE RUSH.", "战斗开始时双方处于中距离，可冲刺拉近或后撤拉远。集齐 7 枚月之碎片发动「月蚀突袭」。"),
         "ok": ("Got it", "知道了"),
         "home.viewer": ("Gallery", "模型鉴赏"),
+        "core.comboTotal": ("%d HIT COMBO", "%d 连击"),
         "style.boxer": ("Boxer", "拳击流"),
         "style.kicker": ("Kicker", "腿技流"),
         "style.brawler": ("Brawler", "蛮力流"),

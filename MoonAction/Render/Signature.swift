@@ -95,6 +95,9 @@ enum Signatures {
 
     static func of(_ card: Card, _ def: FighterDef) -> CardSig { make(key: def.id + "|" + card.id, def: def) }
 
+    /// Signature for a card identified by id only (BattleCore arts cards).
+    static func of(cardID: String, _ def: FighterDef) -> CardSig { make(key: def.id + "|" + cardID, def: def) }
+
     /// Basic (gesture) attacks: the style's first two strikes.
     static func basic(_ def: FighterDef) -> CardSig { make(key: def.id + "|basic", def: def) }
 

@@ -84,7 +84,7 @@ final class HomeScreen: Screen {
         for v in [title, rule, sub] as [UIView] { ui.addSubview(v) }
 
         let battle = Glass.button(L("home.battle"), subtitle: L10n.f("home.stage", save.data.stage), symbol: "play.fill",
-                                  style: .primary, fontSize: 19) { [weak self] in self?.go(TeamScreen()) }
+                                  style: .primary, fontSize: 19) { [weak self] in self?.go(CoreBattleScreen()) }
         let fighters = Glass.button(L("home.fighters"), symbol: "person.2.fill", style: .secondary, fontSize: 15) { [weak self] in
             self?.go(TeamScreen())
         }

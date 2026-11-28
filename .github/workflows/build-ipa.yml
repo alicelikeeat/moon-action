@@ -169,6 +169,7 @@ jobs:
           run viewer;   sleep 6;  shot 15-viewer-a; sleep 4; shot 16-viewer-b
           run cheats;   sleep 6;  shot 17-cheats
           run creator;  sleep 6;  shot 18-creator
+          run core;     sleep 5;  shot 19-core-a; sleep 3; shot 20-core-b; sleep 3; shot 21-core-c; sleep 4; shot 22-core-d
           ls -la shots
 
       - name: Upload screenshots
