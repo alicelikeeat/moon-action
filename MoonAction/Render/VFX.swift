@@ -270,9 +270,9 @@ enum VFX {
     }
 
     static func muzzle(at p: SIMD3<Float>, color: UIColor, size: CGFloat, in parent: SCNNode) {
-        let star = billboard(starburst, color: color.lighter(0.4), size: size, intensity: 3)
-        star.runAction(.group([.scale(to: 1.4, duration: 0.12), .fadeOut(duration: 0.12)]))
-        spawn(star, at: p, in: parent, life: 0.2)
+        let core = billboard(Toon.glowImage, color: color.lighter(0.5), size: size * 0.6, intensity: 1.1)
+        core.runAction(.group([.scale(to: 1.3, duration: 0.07), .fadeOut(duration: 0.07)]))
+        spawn(core, at: p, in: parent, life: 0.12)
     }
 
     /// Energy ball for blasts.
@@ -282,15 +282,12 @@ enum VFX {
         let cm = SCNMaterial()
         cm.diffuse.contents = UIColor.white
         cm.emission.contents = UIColor.white
-        cm.emission.intensity = 3
+        cm.emission.intensity = 1.6
         cm.lightingModel = .constant
         core.geometry?.materials = [cm]
         n.addChildNode(core)
-        let corona = billboard(Toon.glowImage, color: color, size: CGFloat(radius * 2.6), intensity: 1.3)
+        let corona = billboard(Toon.glowImage, color: color, size: CGFloat(radius * 2.2), intensity: 1.0)
         n.addChildNode(corona)
-        let spin = billboard(ring, color: color.lighter(0.3), size: CGFloat(radius * 2.6), intensity: 2)
-        spin.runAction(.repeatForever(.sequence([.scale(to: 1.25, duration: 0.08), .scale(to: 0.9, duration: 0.08)])))
-        n.addChildNode(spin)
         let trail = SCNParticleSystem()
         trail.particleImage = Toon.glowImage
         trail.birthRate = 70
@@ -392,13 +389,13 @@ enum VFX {
 
     /// Big explosion: flash, fireball, smoke, ground shockwave, debris. No full-screen whiteout.
     static func explosion(at p: SIMD3<Float>, color: UIColor, in parent: SCNNode) {
-        let flash = billboard(starburst, color: color.lighter(0.6), size: 6, intensity: 4)
-        flash.runAction(.group([.scale(to: 1.6, duration: 0.18), .fadeOut(duration: 0.18)]))
-        spawn(flash, at: p, in: parent, life: 0.3)
+        let flash = billboard(Toon.glowImage, color: .white, size: 1.6, intensity: 1.2)
+        flash.runAction(.group([.scale(to: 1.4, duration: 0.1), .fadeOut(duration: 0.1)]))
+        spawn(flash, at: p, in: parent, life: 0.16)
 
         let fire = SCNParticleSystem()
         fire.particleImage = smoke
-        fire.birthRate = 1600
+        fire.birthRate = 600
         fire.emissionDuration = 0.08
         fire.loops = false
         fire.particleLifeSpan = 0.8
@@ -406,17 +403,17 @@ enum VFX {
         fire.particleVelocity = 5
         fire.particleVelocityVariation = 3
         fire.spreadingAngle = 180
-        fire.particleSize = 1.1
-        fire.particleSizeVariation = 0.5
+        fire.particleSize = 0.7
+        fire.particleSizeVariation = 0.3
         fire.particleAngleVariation = 180
         fire.particleAngularVelocityVariation = 90
         fire.dampingFactor = 3
         fire.blendMode = .additive
         fire.isLightingEnabled = false
         fire.propertyControllers = [
-            .color: colorRamp([.white, UIColor(hex: 0xFFE7A0), color, color.darker(0.6)], [0, 0.15, 0.5, 1]),
-            .size: ramp([0.4, 1.6, 2.2], [0, 0.5, 1]),
-            .opacity: ramp([1, 0.8, 0], [0, 0.5, 1]),
+            .color: colorRamp([UIColor(hex: 0xFFE7A0), color, color.darker(0.6)], [0, 0.35, 1]),
+            .size: ramp([0.4, 1.3, 1.6], [0, 0.5, 1]),
+            .opacity: ramp([0.75, 0.5, 0], [0, 0.4, 1]),
         ]
         emitter(fire, at: p, in: parent, life: 1.5)
 
@@ -445,17 +442,17 @@ enum VFX {
         sm.diffuse.contents = ring
         sm.multiply.contents = color.lighter(0.3)
         sm.emission.contents = ring
-        sm.emission.intensity = 2.5
+        sm.emission.intensity = 1.3
         sm.lightingModel = .constant
         sm.blendMode = .add
         sm.writesToDepthBuffer = false
         sm.isDoubleSided = true
         shock.geometry?.materials = [sm]
         shock.simdEulerAngles = SIMD3(-.pi / 2, 0, 0)
-        shock.runAction(.group([.scale(to: 7, duration: 0.5), .fadeOut(duration: 0.5)]))
+        shock.runAction(.group([.scale(to: 5, duration: 0.4), .fadeOut(duration: 0.4)]))
         spawn(shock, at: SIMD3(p.x, 0.06, p.z), in: parent, life: 0.6)
 
-        emitter(sparks(color, count: 80, speed: 16, size: 0.16, life: 0.5), at: p, in: parent)
+        emitter(sparks(color, count: 30, speed: 12, size: 0.09, life: 0.3), at: p, in: parent)
         dust(at: SIMD3(p.x, 0.1, p.z), scale: 2.2, in: parent)
     }
 
