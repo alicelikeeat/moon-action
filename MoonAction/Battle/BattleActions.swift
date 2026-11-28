@@ -259,6 +259,7 @@ extension BattleScreen {
         let a = s.current
         let sig = given ?? (style == .basic ? Signatures.basic(a.def)
                             : Signatures.of(style == .eclipse ? Roster.eclipseCard : a.def.specialCard, a.def))
+        a.clashable = style == .normal && !chase
         let o = opponent(of: s)
         let t = o.current
         a.busy = true
@@ -312,6 +313,7 @@ extension BattleScreen {
                 // The hit lands on the clip's impact frame.
                 self.timeline.after(clip.impact / speed, tag: a) { [weak self] in
                     guard let self else { return }
+                    a.clashable = false
                     let target = o.current
                     guard !target.isKO, self.dist(a, target) < Tune.strikeRange else { return }
                     let aiChance = i == 0 ? self.aiDodgeChance : self.aiDodgeChance * 0.25
@@ -339,6 +341,7 @@ extension BattleScreen {
         }))
         steps.append((style == .basic ? 0.16 : 0.14, {
             a.busy = false
+            a.clashable = false
         }))
         timeline.sequence(tag: a, steps)
     }
@@ -457,8 +460,7 @@ extension BattleScreen {
                     if simd_length(live[i].pos - live[j].pos) < live[i].radius + live[j].radius + 0.2 {
                         live[i].alive = false
                         live[j].alive = false
-                        burst(at: live[i].pos, color: .white, scale: 1.5)
-                        Sound.play(.hit)
+                        blastCancel(live[i], live[j])
                     }
                 }
             }
@@ -830,6 +832,7 @@ extension BattleScreen {
         t.hp = max(0, t.hp - dmg)
         timeline.cancel(tag: t)
         t.busy = false
+        t.clashable = false
         t.stunUntil = now + max(stun, heavy ? (react?.minStun ?? 0) : (react == .trip ? HitReact.trip.minStun : 0))
         let src = source ?? a.pos
         var away = t.pos - src
@@ -936,6 +939,7 @@ extension BattleScreen {
             popup(L("battle.breakout"), at: old.chest + SIMD3(0, 0.9, 0), color: Theme.energy, size: 20)
         }
         timeline.cancel(tag: old)
+        old.clashable = false
         old.charging(false)
         let opp = opponent(of: s).current
         if old.isKO {
@@ -1109,5 +1113,56 @@ extension BattleScreen {
             }),
             (0.18, { n.busy = false }),
         ])
+    }
+}
+
+// MARK: - Strike clash / blast cancel
+
+extension BattleScreen {
+    /// Both fighters rushing in with strike cards meet before either lands a hit → impact burst:
+    /// no damage, both are blown apart and briefly staggered, combos reset.
+    func checkClash() {
+        guard started, !battleOver, !cinematic, let p = player?.current, let e = enemy?.current,
+              p.clashable, e.clashable, !p.isKO, !e.isKO, dist(p, e) < Tune.strikeRange + 0.4 else { return }
+        strikeClash(p, e)
+    }
+
+    func strikeClash(_ p: Combatant, _ e: Combatant) {
+        for (c, o) in [(p, e), (e, p)] {
+            c.clashable = false
+            timeline.cancel(tag: c)
+            c.busy = false
+            c.tween = nil
+            c.knockVel = dirTo(o, c) * 11
+            c.stunUntil = now + 0.45
+            c.model.play(Moves.hitBlast)
+        }
+        for s in [player!, enemy!] {
+            s.chainOpenUntil = 0
+            s.comboCount = 0
+            s.relay = nil
+        }
+        let mid = (p.chest + e.chest) / 2
+        explosion(at: mid, color: p.def.aura.blend(e.def.aura, 0.5))
+        VFX.impact(at: mid, color: p.def.aura, heavy: true, in: fxRoot, scale: camScale(mid))
+        VFX.impact(at: mid, color: e.def.aura, heavy: true, in: fxRoot, scale: camScale(mid))
+        beginHitStop(0.16, attacker: p, victim: e, shake: 0.06)
+        popup(L("battle.clash"), at: mid + SIMD3(0, 1.0, 0), color: Theme.accent, size: 26)
+        Sound.play(.boom, pitch: 0.9)
+        let (pos, look) = sideShot(p, e, distance: 5.5)
+        cut(to: pos, look: look, for: 0.6, snap: true)
+    }
+
+    /// Opposing energy shots collide and cancel each other out.
+    func blastCancel(_ a: Projectile, _ b: Projectile) {
+        let mid = (a.pos + b.pos) / 2
+        let k = camScale(mid)
+        VFX.impact(at: mid, color: a.owner.current.def.aura, heavy: true, in: fxRoot, scale: k)
+        VFX.impact(at: mid, color: b.owner.current.def.aura, heavy: false, in: fxRoot, scale: k)
+        VFX.muzzleSparks(at: mid, dir: simd_normalize(a.vel), color: a.owner.current.def.aura, in: fxRoot)
+        VFX.muzzleSparks(at: mid, dir: simd_normalize(b.vel), color: b.owner.current.def.aura, in: fxRoot)
+        popup(L("battle.offset"), at: mid + SIMD3(0, 0.6, 0), color: .white, size: 15)
+        Sound.play(.boom, pitch: 1.5)
+        shake = max(shake, 0.05)
     }
 }

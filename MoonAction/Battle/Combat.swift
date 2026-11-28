@@ -54,6 +54,8 @@ final class Combatant {
     var perfectUsed = true
     var launchedUntil = 0.0
     var auraBurstUntil = 0.0
+    /// A strike card is rushing in and has not landed its first hit yet (can clash with another strike).
+    var clashable = false
     var abilityUsed = false
 
     var isKO: Bool { hp <= 0 }

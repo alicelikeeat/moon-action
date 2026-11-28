@@ -183,6 +183,7 @@ final class BattleScreen: Screen {
         }
         for s in [player!, enemy!] { moveCombatant(s.current, dt) }
         separate()
+        checkClash()
         // Fighting-game hit shake: the defender vibrates in place while frozen.
         if hitStop > 0, let v = hitVictim {
             let a = hitShakeAmp * Float(min(1, hitStop * 12))

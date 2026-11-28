@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import simd
 @testable import MoonAction
 
 /// Deterministic rule tests. Randomness is injected: `rolls` are consumed in order, then `false`.
@@ -259,5 +260,36 @@ final class BattleRulesTests: XCTestCase {
         rolls = []
         XCTAssertTrue(b.applyHit(from: b.enemy, power: 0.05, stun: 0.3, knock: 1, heavy: false, aiDodge: 0))
         XCTAssertFalse(b.isRelayChase(b.player))
+    }
+
+    // MARK: Strike clash
+
+    func testSimultaneousStrikesClashWithoutDamage() {
+        let b = makeBattle()
+        let p = b.player.current, e = b.enemy.current
+        let hp = (p.hp, e.hp)
+        p.pos = SIMD2(0, -1); e.pos = SIMD2(0, 1)
+        p.clashable = true; e.clashable = true
+        p.busy = true; e.busy = true
+        b.checkClash()
+        XCTAssertFalse(p.clashable || e.clashable)
+        XCTAssertFalse(p.busy || e.busy)
+        XCTAssertGreaterThan(p.stunUntil, b.now)
+        XCTAssertGreaterThan(e.stunUntil, b.now)
+        XCTAssertEqual(p.hp, hp.0)
+        XCTAssertEqual(e.hp, hp.1)
+        XCTAssertLessThan(simd_dot(p.knockVel, SIMD2(0, 1)), 0)      // blown apart
+        XCTAssertGreaterThan(simd_dot(e.knockVel, SIMD2(0, 1)), 0)
+    }
+
+    func testNoClashWhenOnlyOneSideStrikes() {
+        let b = makeBattle()
+        let p = b.player.current, e = b.enemy.current
+        p.pos = SIMD2(0, -1); e.pos = SIMD2(0, 1)
+        p.clashable = true
+        p.busy = true
+        b.checkClash()
+        XCTAssertTrue(p.clashable)
+        XCTAssertTrue(p.busy)
     }
 }
