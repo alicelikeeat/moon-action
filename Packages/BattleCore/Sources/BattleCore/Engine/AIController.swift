@@ -22,9 +22,9 @@ public enum Difficulty: String, CaseIterable, Sendable {
     /// Reaction delay before acting on a warning.
     public var reaction: Double {
         switch self {
-        case .novice: return 0.28
-        case .standard: return 0.16
-        case .challenge: return 0.08
+        case .novice: return 0.32
+        case .standard: return 0.20
+        case .challenge: return 0.12
         }
     }
 
@@ -64,6 +64,8 @@ public struct AIController: Sendable {
     var decidedThreat = false
     var chargeUntilKi: Double?
     var lastChainCheck: Double = -1
+    var routeStart: Double?
+    var routeStage = 0
 
     public init(side: Int, difficulty: Difficulty) {
         self.side = side
@@ -110,8 +112,11 @@ public struct AIController: Sendable {
         } else {
             decidedThreat = false
         }
-        // Tag out when low on HP: cover change while being comboed, or a normal switch in neutral.
-        if me.hp < me.maxHP * 0.35, let mate = bestTeammate(e) {
+        // Tag out when low on HP (or, on Challenge, at an element disadvantage): cover change while being
+        // comboed, or a normal switch in neutral.
+        let disadvantaged = difficulty == .challenge
+            && Element.matchup(attacker: me.def.element, defender: e.sides[1 - side].current.def.element) == .disadvantage
+        if me.hp < me.maxHP * 0.35 || disadvantaged, let mate = bestTeammate(e) {
             let comboed = me.phase == .stunned
             if (comboed && e.rng.chance(difficulty == .challenge ? 0.04 : 0.015)) || (me.canAct && e.time >= nextThink && e.rng.chance(0.5)) {
                 if e.apply(.switchTo(mate), side: side, events: &events) {
@@ -130,6 +135,34 @@ public struct AIController: Sendable {
             if let target = chargeUntilKi, e.sides[side].ki < target, e.incomingThreat(on: side) == nil { return }
             chargeUntilKi = nil
             e.apply(.chargeEnd, side: side, events: &events)
+        }
+        // Challenge AI: side-step combo route (dash → side-step → card within 0.42 s).
+        if let t0 = routeStart {
+            let dt = e.time - t0
+            if routeStage == 1, dt >= 0.07 {
+                routeStage = 2
+                e.apply(.sidestep(e.rng.chance(0.5) ? 1 : -1), side: side, events: &events)
+            } else if routeStage == 2, dt >= 0.2 {
+                routeStart = nil
+                routeStage = 0
+                if let slot = bestSlot(&e, chaining: true) { e.apply(.play(slot), side: side, events: &events) }
+            } else if dt > 0.4 {
+                routeStart = nil
+                routeStage = 0
+            }
+            return
+        }
+        // Rising Rush on a stunned opponent.
+        if e.canRush(side: side), e.sides[1 - side].current.phase == .stunned, e.routeOpen(side) {
+            e.apply(.risingRush, side: side, events: &events)
+            return
+        }
+        if difficulty == .challenge, e.routeOpen(side), e.time > lastChainCheck, e.rng.chance(0.5),
+           e.sides[side].ki >= 25, e.apply(.moveForward, side: side, events: &events) {
+            routeStart = e.time
+            routeStage = 1
+            lastChainCheck = e.time + 1
+            return
         }
         // Offense: chain off a connecting card.
         if me.phase == .acting, let act = me.action, act.chainable(at: e.time), e.time > lastChainCheck {

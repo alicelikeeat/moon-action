@@ -6,40 +6,63 @@ enum SFX: CaseIterable {
     case whoosh, crack, thud, slap, zap, boom
 }
 
+/// Synthesized SFX played through AVAudioEngine: a pool of player voices, each through a varispeed unit
+/// so per-card signatures can shift pitch + speed together. Falls back to silence if the engine cannot start.
 @MainActor
 final class Sound {
     static let shared = Sound()
-    private var pools: [SFX: [AVAudioPlayer]] = [:]
-    private var cursor: [SFX: Int] = [:]
+    private let engine = AVAudioEngine()
+    private var buffers: [SFX: AVAudioPCMBuffer] = [:]
+    private var voices: [(player: AVAudioPlayerNode, speed: AVAudioUnitVarispeed)] = []
+    private var cursor = 0
+    private var running = false
     var enabled = true
 
     private init() {
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: Double(Sound.rate), channels: 1) else { return }
         for s in SFX.allCases {
-            let data = Sound.wav(Sound.synth(s))
-            var players: [AVAudioPlayer] = []
-            for _ in 0..<3 {
-                if let p = try? AVAudioPlayer(data: data) {
-                    p.volume = Sound.volume(s)
-                    p.enableRate = true
-                    p.prepareToPlay()
-                    players.append(p)
-                }
-            }
-            pools[s] = players
+            let samples = Sound.synth(s)
+            guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
+                  let ch = buf.floatChannelData?[0] else { continue }
+            let v = Sound.volume(s)
+            for (i, x) in samples.enumerated() { ch[i] = max(-1, min(1, x)) * v }
+            buf.frameLength = AVAudioFrameCount(samples.count)
+            buffers[s] = buf
         }
+        for _ in 0..<10 {
+            let p = AVAudioPlayerNode(), v = AVAudioUnitVarispeed()
+            engine.attach(p)
+            engine.attach(v)
+            engine.connect(p, to: v, format: format)
+            engine.connect(v, to: engine.mainMixerNode, format: format)
+            voices.append((p, v))
+        }
+        try? AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
+        start()
+        NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { _ in
+            Task { @MainActor in Sound.shared.start() }
+        }
+    }
+
+    private func start() {
+        guard !engine.isRunning else { running = true; return }
+        engine.prepare()
+        running = (try? engine.start()) != nil
     }
 
     static func play(_ s: SFX, pitch: Float = 1) { shared.play(s, pitch: pitch) }
 
     /// `pitch` (0.5…2) shifts pitch and speed together; per-card signatures use it for their own voice.
     func play(_ s: SFX, pitch: Float = 1) {
-        guard enabled, let players = pools[s], !players.isEmpty else { return }
-        let i = (cursor[s] ?? 0) % players.count
-        cursor[s] = i + 1
-        let p = players[i]
-        p.rate = max(0.5, min(2, pitch))
-        p.currentTime = 0
-        p.play()
+        guard enabled, let buf = buffers[s] else { return }
+        if !engine.isRunning { start() }
+        guard running, !voices.isEmpty else { return }
+        let v = voices[cursor % voices.count]
+        cursor += 1
+        v.speed.rate = max(0.5, min(2, pitch))
+        v.player.stop()
+        v.player.scheduleBuffer(buf, at: nil, options: [], completionHandler: nil)
+        v.player.play()
     }
 
     private static let rate = 22050

@@ -212,7 +212,7 @@ extension BattleEngine {
     // MARK: Rising Rush (7 orbs)
 
     public func canRush(side s: Int) -> Bool {
-        !over && clash == nil && rush == nil && sides[s].orbs >= Tune.rushOrbs && sides[s].current.canAct
+        !over && clash == nil && rush == nil && sides[s].orbs >= Tune.rushOrbs && (sides[s].current.canAct || routeOpen(s))
     }
 
     mutating func startRush(_ s: Int, _ events: inout [BattleEvent]) -> Bool {

@@ -205,12 +205,14 @@ final class CoreBattleScreen: Screen {
             h.removeFromParent()
         }
         hosts = []
+        Haptics.charge(false)
         if let o = resignObserver { NotificationCenter.default.removeObserver(o) }
     }
 
     private func setPaused(_ p: Bool) {
         guard hud.paused != p, !finished else { return }
         hud.paused = p
+        if p { Haptics.charge(false) }
         gesture.reset()
         if p {
             let hc = UIHostingController(rootView: CorePauseOverlay(m: hud))
@@ -824,9 +826,7 @@ final class CoreBattleScreen: Screen {
         hitStop = max(hitStop, min(0.14, (h.heavy ? 0.1 : (h.kind == .basic ? 0.04 : 0.06)) + (h.crit ? 0.03 : 0)))
         cam.shake = max(cam.shake, h.heavy ? 0.09 : 0.025)
         cam.kick += SIMD3(dir.x, -0.1, dir.z) * (h.heavy ? 0.3 : 0.1)
-        if a == 0 || d == 0 {
-            if h.heavy { Haptics.heavy.impactOccurred() } else { Haptics.light.impactOccurred() }
-        }
+        Haptics.impact(heavy: h.heavy, crit: h.crit)
     }
 
     private func shot(from s: Int, travel: Double, big: Bool) {
@@ -903,6 +903,7 @@ final class CoreBattleScreen: Screen {
                 m.stance()
                 m.setAura(0)
             }
+            if s == 0 { Haptics.charge(charging) }
         }
     }
 

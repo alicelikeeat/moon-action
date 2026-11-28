@@ -1,5 +1,6 @@
 import UIKit
 import simd
+import CoreHaptics
 
 extension UIColor {
     convenience init(hex: UInt32, alpha: CGFloat = 1) {
@@ -72,6 +73,85 @@ enum Haptics {
     static let rigid = Gen(.rigid)
 
     static func hit(_ big: Bool) { (big ? heavy : light).impactOccurred() }
+
+    /// Layered CoreHaptics: sharp transient + short body rumble (heavier hits rumble longer / lower).
+    static func impact(heavy big: Bool, crit: Bool = false) {
+        guard enabled else { return }
+        if !Rich.shared.impact(heavy: big, crit: crit) { hit(big) }
+    }
+
+    /// Ki charge: continuous low rumble that builds while held.
+    static func charge(_ on: Bool) {
+        guard enabled || !on else { return }
+        Rich.shared.charge(on)
+    }
+
+    /// CoreHaptics wrapper; on devices without haptics (simulator, iPad) every call is a graceful no-op.
+    @MainActor
+    final class Rich {
+        static let shared = Rich()
+        private var engine: CHHapticEngine?
+        private var chargePlayer: CHHapticAdvancedPatternPlayer?
+        private var chargeStart = Date()
+
+        private init() {
+            guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
+            engine = try? CHHapticEngine()
+            engine?.isAutoShutdownEnabled = true
+            engine?.resetHandler = { [weak self] in
+                Task { @MainActor in try? self?.engine?.start() }
+            }
+            try? engine?.start()
+        }
+
+        @discardableResult
+        func impact(heavy: Bool, crit: Bool) -> Bool {
+            guard let engine else { return false }
+            let sharp = CHHapticEvent(eventType: .hapticTransient, parameters: [
+                .init(parameterID: .hapticIntensity, value: heavy || crit ? 1 : 0.6),
+                .init(parameterID: .hapticSharpness, value: crit ? 1 : 0.7),
+            ], relativeTime: 0)
+            let body = CHHapticEvent(eventType: .hapticContinuous, parameters: [
+                .init(parameterID: .hapticIntensity, value: heavy ? 0.8 : 0.35),
+                .init(parameterID: .hapticSharpness, value: heavy ? 0.15 : 0.35),
+            ], relativeTime: 0.01, duration: heavy ? 0.16 : 0.05)
+            do {
+                try engine.start()
+                let pattern = try CHHapticPattern(events: [sharp, body], parameters: [])
+                try engine.makePlayer(with: pattern).start(atTime: CHHapticTimeImmediate)
+                return true
+            } catch {
+                return false
+            }
+        }
+
+        func charge(_ on: Bool) {
+            guard let engine else { return }
+            if !on {
+                try? chargePlayer?.stop(atTime: CHHapticTimeImmediate)
+                chargePlayer = nil
+                return
+            }
+            guard chargePlayer == nil else { return }
+            let rumble = CHHapticEvent(eventType: .hapticContinuous, parameters: [
+                .init(parameterID: .hapticIntensity, value: 1),
+                .init(parameterID: .hapticSharpness, value: 0.1),
+            ], relativeTime: 0, duration: 30)
+            // Intensity ramps from soft to strong over 1.2 s (crescendo), then holds.
+            let curve = CHHapticParameterCurve(parameterID: .hapticIntensityControl, controlPoints: [
+                .init(relativeTime: 0, value: 0.15), .init(relativeTime: 1.2, value: 0.75), .init(relativeTime: 30, value: 0.75),
+            ], relativeTime: 0)
+            do {
+                try engine.start()
+                let pattern = try CHHapticPattern(events: [rumble], parameterCurves: [curve])
+                let player = try engine.makeAdvancedPlayer(with: pattern)
+                try player.start(atTime: CHHapticTimeImmediate)
+                chargePlayer = player
+            } catch {
+                chargePlayer = nil
+            }
+        }
+    }
     static func select() { if enabled { UISelectionFeedbackGenerator().selectionChanged() } }
     static func success() { if enabled { UINotificationFeedbackGenerator().notificationOccurred(.success) } }
 }
