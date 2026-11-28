@@ -316,7 +316,16 @@ extension BattleScreen {
                     guard let self else { return }
                     a.clashable = false
                     let target = o.current
-                    guard !target.isKO, self.dist(a, target) < Tune.strikeRange else { return }
+                    guard !target.isKO else { return }
+                    // Attack tracking (fighting-game homing): close the gap so a committed hit connects.
+                    let gap = self.dist(a, target)
+                    if gap >= Tune.strikeRange && gap < Tune.strikeRange + 3 && self.now >= target.invulnUntil {
+                        let dir = self.dirTo(a, target)
+                        a.tween = nil
+                        a.knockVel = .zero
+                        a.pos = target.pos - dir * Tune.meleeStop
+                    }
+                    guard self.dist(a, target) < Tune.strikeRange else { return }
                     let aiChance = i == 0 ? self.aiDodgeChance : self.aiDodgeChance * 0.25
                     let heavy = last && style != .basic
                     self.applyHit(from: s, power: per * (last ? 1.4 : 1), stun: last ? 0.7 : 0.4,
@@ -356,11 +365,7 @@ extension BattleScreen {
         a.busy = true
         timeline.cancel(tag: a)
         let first = a.model.shoot(shot)
-        // Hand glow while charging the shot; kept small when the hand is right in front of the camera.
-        let near = Float(camScale(a.model.handWorld))
-        let glow = Toon.glowSprite(a.def.aura, size: CGFloat(0.35 * near))
-        a.model.fistR.addChildNode(glow)
-        glow.runAction(.scale(to: CGFloat(1 + near), duration: 0.2))
+        let glow = SCNNode()
         let interval = hits > 3 ? 0.1 : 0.14
         // Shots release on the clip's impact frame; volleys alternate hands.
         var steps: [(Double, () -> Void)] = [(first.impact + 0.06, {})]
@@ -401,8 +406,7 @@ extension BattleScreen {
         dir = simd_normalize(dir + right * spread)
         let n = VFX.projectile(color: a.def.aura, radius: radius)
         let near = camScale(start)
-        VFX.muzzle(at: start, color: a.def.aura, size: CGFloat(radius * 6) * near * near, in: fxRoot)
-        VFX.muzzleSparks(at: start, dir: dir, color: a.def.aura, in: fxRoot)
+        VFX.muzzle(at: start, color: a.def.aura, size: CGFloat(radius * 3.5) * near * near, in: fxRoot)
         // Recoil: the shooter is pushed back a little, camera nudges when the player fires.
         let back = SCNAction.moveBy(x: 0, y: 0, z: CGFloat(-0.12 - radius * 0.3), duration: 0.05)
         back.timingMode = .easeOut
@@ -509,7 +513,7 @@ extension BattleScreen {
         let orb = VFX.chargeIn(color: color, radius: CGFloat(1.0 + radius))
         a.model.fistR.addChildNode(orb)
         orb.childNode(withName: "orb", recursively: false)?.runAction(.scale(to: CGFloat(1 + radius * 4), duration: startup))
-        if s.isPlayer || ultimate { hud.speedLines(startup) }
+        if ultimate { hud.speedLines(startup) }
         var locked = false
         var beamNode: SCNNode?
         var steps: [(Double, () -> Void)] = [(startup, { [weak self] in
@@ -866,7 +870,6 @@ extension BattleScreen {
         kickCamera(from: a.world3, to: t.world3, strength: heavy ? 0.32 : (basic ? 0.07 : 0.12))
         shake = max(shake, heavy ? 0.1 : 0.025)
         if heavy || crit { fovKick = max(-6, fovKick - (heavy ? 4 : 2)) }
-        if heavy && !o.isPlayer { hud.screenFlash(UIColor(white: 1, alpha: 0.5)) }
         Sound.play(sfx ?? (heavy || crit ? .heavy : .hit), pitch: pitch)
         if heavy && !basic { Sound.play(.crack, pitch: pitch * 0.8) }
         if s.isPlayer || o.isPlayer {
@@ -893,7 +896,6 @@ extension BattleScreen {
         Sound.play(.ko)
         // KO: long freeze-frame + flash before the slow-motion replay angle.
         beginHitStop(0.22, attacker: opponent(of: side).current, victim: c, shake: 0.09)
-        hud.screenFlash(.white)
         shake = 0.3
         hud.banner(L("battle.ko"), color: Theme.hpEnemy, big: true, duration: 0.9)
         timeScale = 0.3
@@ -1090,30 +1092,13 @@ extension BattleScreen {
         n.model.play(Moves.coverGuard)
         n.model.afterimage(in: fxRoot)
         Sound.play(.slap, pitch: 0.8)
-        VFX.impact(at: n.chest + SIMD3(0, 0.2, 0), color: .white, heavy: false, in: fxRoot, scale: camScale(n.chest))
         if s.isPlayer { Haptics.rigid.impactOccurred() }
-        let push = Moves.doublePalm
-        let speed = 1.35
-        timeline.sequence(tag: n, [
-            (0.22, { n.model.play(push, speed: speed) }),
-            (push.impact / speed, { [weak self] in
-                guard let self, !o.isKO else { return }
-                let dir = self.dirTo(n, o)
-                o.tween = nil
-                o.knockVel = dir * 9
-                o.stunUntil = max(o.stunUntil, self.now + 0.45)
-                o.busy = false
-                self.timeline.cancel(tag: o)
-                o.model.hurt(heavy: false)
-                let p = o.chest + SIMD3(0, 0.1, 0)
-                VFX.impact(at: p, color: n.def.aura, heavy: true, in: self.fxRoot, dir: SIMD3(dir.x, 0.1, dir.y), scale: self.camScale(p))
-                self.beginHitStop(0.08, attacker: n, victim: o, shake: 0.05)
-                self.kickCamera(from: n.world3, to: o.world3, strength: 0.25)
-                Sound.play(.heavy, pitch: 0.9)
-                if s.isPlayer || o === self.player.current { Haptics.hit(true) }
-            }),
-            (0.18, { n.busy = false }),
-        ])
+        // The guard only ends the combo and makes room; it is not a counter-attack.
+        if !o.isKO {
+            o.tween = nil
+            o.knockVel = dirTo(n, o) * 4
+        }
+        timeline.sequence(tag: n, [(0.3, { n.busy = false })])
     }
 }
 
@@ -1144,7 +1129,9 @@ extension BattleScreen {
             s.relay = nil
         }
         let mid = (p.chest + e.chest) / 2
-        explosion(at: mid, color: p.def.aura.blend(e.def.aura, 0.5))
+        VFX.dust(at: SIMD3(mid.x, 0.1, mid.z), scale: 1.2, in: fxRoot)
+        shake = max(shake, 0.18)
+        Haptics.hit(true)
         VFX.impact(at: mid, color: p.def.aura, heavy: true, in: fxRoot, scale: camScale(mid))
         VFX.impact(at: mid, color: e.def.aura, heavy: true, in: fxRoot, scale: camScale(mid))
         beginHitStop(0.16, attacker: p, victim: e, shake: 0.06)
@@ -1160,8 +1147,6 @@ extension BattleScreen {
         let k = camScale(mid)
         VFX.impact(at: mid, color: a.owner.current.def.aura, heavy: true, in: fxRoot, scale: k)
         VFX.impact(at: mid, color: b.owner.current.def.aura, heavy: false, in: fxRoot, scale: k)
-        VFX.muzzleSparks(at: mid, dir: simd_normalize(a.vel), color: a.owner.current.def.aura, in: fxRoot)
-        VFX.muzzleSparks(at: mid, dir: simd_normalize(b.vel), color: b.owner.current.def.aura, in: fxRoot)
         popup(L("battle.offset"), at: mid + SIMD3(0, 0.6, 0), color: .white, size: 15)
         Sound.play(.boom, pitch: 1.5)
         shake = max(shake, 0.05)

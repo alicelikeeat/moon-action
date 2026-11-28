@@ -25,7 +25,7 @@ extension BattleScreen {
 
         // Locked in the opponent's combo: the only way out is switching fighters.
         if inHitstun(s) {
-            if now >= s.swapReadyAt, c.hp < c.maxHP * 0.6, now - o.lastHitTime < 0.5, roll(0.012),
+            if now >= s.swapReadyAt, c.hp < c.maxHP * 0.35, c.stunUntil - now > 0.3, roll(0.004),
                let i = s.team.indices.first(where: { $0 != s.active && !s.team[$0].isKO }) {
                 swap(s, to: i, forced: false)
             }

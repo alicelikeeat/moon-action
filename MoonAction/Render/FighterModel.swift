@@ -655,12 +655,12 @@ final class FighterModel {
         guard level != currentAura else { return }
         currentAura = level
         let l = max(0, min(3, level))
-        aura.birthRate = [0, 8, 90, 170][l]
-        sparks.birthRate = [0, 0, 40, 70][l]
+        aura.birthRate = [0, 0, 55, 80][l]
+        sparks.birthRate = [0, 0, 20, 30][l]
     }
 
     func flash() {
-        for m in materials { m.emission.contents = UIColor(white: 0.75, alpha: 1) }
+        for m in materials { m.emission.contents = UIColor(white: 0.45, alpha: 1) }
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 70_000_000)
             self?.materials.forEach { $0.emission.contents = UIColor.black }

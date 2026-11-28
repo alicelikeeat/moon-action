@@ -212,38 +212,20 @@ enum VFX {
 
     /// Hit impact: star flash + shockwave ring + sparks (+ debris for heavy).
     /// `scale` shrinks the flash for impacts close to the camera (hits on the player's own fighter).
+    /// Hit spark in the arcade-fighter style: a tiny white core and short sparks along the hit. Nothing lingers.
     static func impact(at p: SIMD3<Float>, color: UIColor, heavy: Bool, in parent: SCNNode, dir: SIMD3<Float>? = nil, scale k: CGFloat = 1) {
         if let dir { directional(at: p, dir: dir, color: color, heavy: heavy, in: parent, scale: k) }
-        let star = billboard(starburst, color: color.lighter(0.5), size: (heavy ? 0.95 : 0.6) * k, intensity: 1.5 * min(1, k + 0.2))
-        star.simdEulerAngles.z = Float.random(in: 0..<(2 * .pi))
-        star.scale = SCNVector3(0.3, 0.3, 0.3)
-        star.runAction(.sequence([.scale(to: 1, duration: 0.05), .group([.scale(to: 1.25, duration: 0.12), .fadeOut(duration: 0.12)])]))
-        spawn(star, at: p, in: parent, life: 0.3)
-
-        let ringNode = billboard(ring, color: color, size: (heavy ? 1.0 : 0.6) * k, intensity: 1.8 * min(1, k + 0.2))
-        ringNode.scale = SCNVector3(0.2, 0.2, 0.2)
-        ringNode.runAction(.group([.scale(to: heavy ? 2.6 : 1.8, duration: 0.25), .fadeOut(duration: 0.25)]))
-        spawn(ringNode, at: p, in: parent, life: 0.4)
-
-        emitter(sparks(color, count: heavy ? 40 : 16, speed: heavy ? 11 : 7, size: (heavy ? 0.12 : 0.08) * k), at: p, in: parent, life: 0.8)
+        let core = billboard(Toon.glowImage, color: .white, size: (heavy ? 0.55 : 0.35) * k, intensity: 1.2)
+        core.runAction(.group([.scale(to: 1.3, duration: 0.07), .fadeOut(duration: 0.07)]))
+        spawn(core, at: p, in: parent, life: 0.12)
         if heavy {
-            let debris = SCNParticleSystem()
-            debris.particleImage = Toon.glowImage
-            debris.birthRate = 500
-            debris.emissionDuration = 0.04
-            debris.loops = false
-            debris.particleLifeSpan = 0.6
-            debris.particleVelocity = 4
-            debris.particleVelocityVariation = 2
-            debris.spreadingAngle = 70
-            debris.emittingDirection = SCNVector3(0, 1, 0)
-            debris.particleSize = 0.05
-            debris.particleColor = color.lighter(0.4)
-            debris.blendMode = .additive
-            debris.isLightingEnabled = false
-            debris.acceleration = SCNVector3(0, -9, 0)
-            debris.propertyControllers = [.opacity: ramp([1, 0], [0.5, 1])]
-            emitter(debris, at: p, in: parent)
+            let ringNode = billboard(ring, color: color.lighter(0.3), size: 0.5 * k, intensity: 1.2)
+            ringNode.scale = SCNVector3(0.4, 0.4, 0.4)
+            ringNode.runAction(.group([.scale(to: 1.6, duration: 0.14), .fadeOut(duration: 0.14)]))
+            spawn(ringNode, at: p, in: parent, life: 0.2)
+        }
+        if dir == nil {
+            emitter(sparks(color, count: heavy ? 18 : 8, speed: heavy ? 9 : 6, size: (heavy ? 0.07 : 0.05) * k, life: 0.14), at: p, in: parent, life: 0.4)
         }
     }
 
@@ -251,10 +233,10 @@ enum VFX {
     static func directional(at p: SIMD3<Float>, dir: SIMD3<Float>, color: UIColor, heavy: Bool, in parent: SCNNode, scale k: CGFloat = 1) {
         let s = SCNParticleSystem()
         s.particleImage = Toon.sparkImage
-        s.birthRate = heavy ? 900 : 420
+        s.birthRate = heavy ? 500 : 220
         s.emissionDuration = 0.03
         s.loops = false
-        s.particleLifeSpan = heavy ? 0.22 : 0.16
+        s.particleLifeSpan = heavy ? 0.14 : 0.1
         s.particleLifeSpanVariation = 0.06
         s.particleVelocity = heavy ? 18 : 12
         s.particleVelocityVariation = 6
@@ -266,12 +248,6 @@ enum VFX {
         s.isLightingEnabled = false
         s.propertyControllers = [.color: colorRamp([.white, color.lighter(0.4), color], [0, 0.35, 1]), .opacity: ramp([1, 0])]
         emitter(s, at: p, in: parent, life: 0.5)
-        // Flat elongated flash across the impact, oriented by the hit direction.
-        let slash = billboard(Toon.glowImage, color: .white, size: (heavy ? 1.15 : 0.75) * k, intensity: 1.5 * min(1, k + 0.2))
-        slash.scale = SCNVector3(1.0, 0.16, 1)
-        slash.eulerAngles.z = Float.random(in: -0.6...0.6)
-        slash.runAction(.sequence([.wait(duration: 0.03), .group([.scale(to: 0.01, duration: 0.1), .fadeOut(duration: 0.1)])]))
-        spawn(slash, at: p, in: parent, life: 0.25)
     }
 
     static func muzzleSparks(at p: SIMD3<Float>, dir: SIMD3<Float>, color: UIColor, in parent: SCNNode) {
@@ -317,7 +293,7 @@ enum VFX {
         n.addChildNode(spin)
         let trail = SCNParticleSystem()
         trail.particleImage = Toon.glowImage
-        trail.birthRate = 160
+        trail.birthRate = 70
         trail.particleLifeSpan = 0.22
         trail.particleSize = CGFloat(radius * 2.2)
         trail.emitterShape = SCNSphere(radius: CGFloat(radius * 0.3))
@@ -525,9 +501,6 @@ enum VFX {
         s.runAction(.group([.scaleX(to: 0.05, duration: 0.22), .fadeOut(duration: 0.22)]))
         spawn(s, at: base + SIMD3(0, height * 0.55, 0), in: parent, life: 0.3)
 
-        let r = billboard(ring, color: color, size: 0.6, intensity: 2.5)
-        r.runAction(.group([.scale(to: 3, duration: 0.25), .fadeOut(duration: 0.25)]))
-        spawn(r, at: base + SIMD3(0, height * 0.5, 0), in: parent, life: 0.35)
         emitter(sparks(color, count: 14, speed: 4, size: 0.07, life: 0.25), at: base + SIMD3(0, height * 0.5, 0), in: parent)
     }
 }

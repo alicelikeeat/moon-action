@@ -11,7 +11,6 @@ extension BattleScreen {
 
     func spark(at p: SIMD3<Float>, color: UIColor, big: Bool, dir: SIMD3<Float>? = nil) {
         VFX.impact(at: p, color: color, heavy: big, in: fxRoot, dir: dir, scale: camScale(p))
-        if big { hud.speedLines(0.18) }
     }
 
     func sparkLegacy(at p: SIMD3<Float>, color: UIColor, big: Bool) {

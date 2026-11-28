@@ -49,7 +49,7 @@ final class BattleScreen: Screen {
     var aiNext: [ObjectIdentifier: Double] = [:]
     var aiChargeUntil: [ObjectIdentifier: Double] = [:]
     var aiThinkMin: Double { max(0.35, 0.95 - Double(stage) * 0.03) }
-    var aiDodgeChance: Double { min(0.5, 0.15 + Double(stage) * 0.017) }
+    var aiDodgeChance: Double { min(0.32, 0.08 + Double(stage) * 0.012) }
 
     /// Randomness seams (tests replace these with deterministic sources).
     var roll: (Double) -> Bool = { chance($0) }
@@ -77,9 +77,9 @@ final class BattleScreen: Screen {
         pointOfView = arena.camera
         // Battle camera: tighter, weaker bloom so additive hit/teleport FX stay crisp instead of white halos.
         if let cam = arena.camera.camera {
-            cam.bloomIntensity = 0.45
-            cam.bloomThreshold = 1.0
-            cam.bloomBlurRadius = 7
+            cam.bloomIntensity = 0.25
+            cam.bloomThreshold = 1.2
+            cam.bloomBlurRadius = 5
         }
         arena.world.addChildNode(fxRoot)
 
