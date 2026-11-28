@@ -57,7 +57,7 @@ struct PortraitImage: View {
     let def: BattleCore.FighterDef
     var size: CGFloat = 56
     var body: some View {
-        let img = Portraits.image(CoreVisuals.visual(def), .bust, size: CGSize(width: size, height: size))
+        let img = Portraits.image(CoreVisuals.visual(def), .bust, size: CGSize(width: size, height: size)) ?? UIImage()
         Image(uiImage: img)
             .resizable().scaledToFill()
             .frame(width: size, height: size)

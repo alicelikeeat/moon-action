@@ -7,6 +7,12 @@ public struct UserSaveData: Codable, Sendable, Equatable {
         public var stars = 1
         /// Equipped item ids by slot (up to 3).
         public var equipped: [Int] = []
+
+        public init(level: Int = 1, stars: Int = 1, equipped: [Int] = []) {
+            self.level = level
+            self.stars = stars
+            self.equipped = equipped
+        }
     }
 
     public struct Materials: Codable, Sendable, Equatable {
