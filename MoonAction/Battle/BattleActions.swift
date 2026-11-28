@@ -278,6 +278,7 @@ extension BattleScreen {
             popup(L("battle.chase"), at: a.chest + SIMD3(0, 0.9, 0), color: Theme.energy, size: 20)
             Sound.play(.dodge)
             if s.isPlayer { hud.flashEvade() }
+            snapCamera = true
         } else if d > Tune.meleeStop + 0.25 {
             let speed: Float = a.def.speed.dashSpeed * (style == .rush || style == .eclipse ? 1.25 : 1)
             let dashT = Double(max(0.07, (d - Tune.meleeStop) / speed))
