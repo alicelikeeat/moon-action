@@ -16,6 +16,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Select Xcode 26 (Liquid Glass SDK)
         run: |
@@ -78,6 +80,30 @@ jobs:
           name: ${{ env.IPA_NAME }}
           path: ${{ env.IPA_NAME }}
 
+      - name: Release notes
+        run: |
+          PREV=$(git tag --list 'v*' --sort=-v:refname | grep -vx "v$APP_VERSION" | head -1 || true)
+          {
+            echo "## Moon Action $APP_VERSION（build $APP_BUILD）"
+            echo
+            echo "### 更新说明"
+            if [ -f RELEASE_NOTES.md ]; then grep -v '^<!--' RELEASE_NOTES.md; else echo "- 常规更新"; fi
+            echo
+            if [ -n "$PREV" ]; then
+              echo "### 自 $PREV 以来的全部提交"
+              git log --no-merges --pretty='- %s（%h）' "$PREV"..HEAD
+            else
+              echo "### 最近的提交"
+              git log --no-merges -n 20 --pretty='- %s（%h）'
+            fi
+            echo
+            echo "---"
+            echo "**安装**：未签名 IPA，请用 AltStore、Sideloadly 或 TrollStore（支持的设备）重新签名后安装。需要 iOS 16 及以上，竖屏。"
+            echo
+            echo "版本号 $APP_VERSION / build $APP_BUILD 已从构建出的 Info.plist 校验 · commit ${GITHUB_SHA}"
+          } > release_notes.md
+          cat release_notes.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -85,17 +111,7 @@ jobs:
           name: Moon Action ${{ env.APP_VERSION }} · unsigned IPA
           target_commitish: ${{ github.sha }}
           files: ${{ env.IPA_NAME }}
-          body: |
-            **Version ${{ env.APP_VERSION }} · build ${{ env.APP_BUILD }}** (CFBundleShortVersionString / CFBundleVersion, verified from the built Info.plist) · commit ${{ github.sha }}
-
-            Unsigned iOS build of **Moon Action** — an original portrait 3D card battle game.
-
-            * Portrait, over-the-shoulder 3D camera, procedurally generated cel-shaded fighters
-            * Card system: Strike · Blast · Special Art · Ultimate Art · Effect cards · Eclipse Rush team finisher
-            * Native iOS 26 Liquid Glass UI
-
-            This IPA is **not signed**. Sideload it with a tool that re-signs the app
-            (e.g. AltStore, Sideloadly, or TrollStore on supported devices). Requires iOS 16+.
+          body_path: release_notes.md
 
       - name: Build for simulator
         run: |
