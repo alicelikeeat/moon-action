@@ -151,6 +151,7 @@ final class BattleScreen: Screen {
     // MARK: - Loop
 
     override func update(dt rawDT: Double) {
+        syncAnimRates()
         if paused { return }
         var dt = rawDT * timeScale
         if hitStop > 0 {
@@ -220,7 +221,7 @@ final class BattleScreen: Screen {
             if charging != c.wasCharging {
                 c.wasCharging = charging
                 if charging {
-                    c.model.apply(FighterModel.chargePose, duration: 0.2)
+                    c.model.charge()
                 } else if !c.busy {
                     c.model.stance()
                 }
@@ -501,5 +502,17 @@ extension BattleScreen {
         d.y = 0
         guard simd_length(d) > 1e-3 else { return }
         camKick += simd_normalize(d) * strength + SIMD3(0, -strength * 0.3, 0)
+    }
+}
+
+extension BattleScreen {
+    /// Animation follows game time: frozen during pause and hit stop (for frozen fighters), slowed in slow-mo.
+    func syncAnimRates() {
+        for s in [player, enemy].compactMap({ $0 }) {
+            for c in s.team {
+                let frozen = hitStop > 0 && frozenRoots.contains(c.model.root)
+                c.model.animRate = paused || frozen ? 0 : timeScale
+            }
+        }
     }
 }

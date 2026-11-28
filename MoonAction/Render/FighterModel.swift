@@ -30,6 +30,7 @@ final class FighterModel {
     private lazy var sparks: SCNParticleSystem = VFX.chargeSparks(def.look.aura)
     private var rng: UInt64
     private var retarget: Retargeter?
+    private var animator: Animator!
     private var importedHolder: SCNNode?
     /// Number of game joints mapped onto an imported skeleton (nil = procedural model).
     private(set) var importedBones: Int?
@@ -65,8 +66,9 @@ final class FighterModel {
             buildMesh()
         }
         root.simdScale = SIMD3(repeating: def.look.height)
-        apply(FighterModel.stancePose, duration: 0)
-        idle()
+        animator = Animator(joints: joints, body: body, rest: SIMD3(0, FighterModel.hover, 0))
+        animator.set(FighterModel.stancePose)
+        FighterModel.all.append(Weak(m: self))
     }
 
     private func rand(_ lo: Float, _ hi: Float) -> Float {
@@ -522,107 +524,96 @@ final class FighterModel {
         .hipR: SIMD3(0.1, 0, -0.1), .kneeR: SIMD3(0.3, 0, 0),
     ]
 
+    // MARK: - Actions (keyframe clips, see Moves)
+
+    /// Animation playback rate set by the battle (0 during hit stop / pause, < 1 in slow motion).
+    var animRate: Double = 1
+    private var comboStep = 0
+
+    private static var all: [Weak] = []
+
+    /// Advance every fighter's animator (called once per frame before imported skeletons sync).
+    static func tickAll(_ dt: Double) {
+        all.removeAll { $0.m == nil }
+        for w in all { if let m = w.m { m.animator.tick(dt * m.animRate) } }
+    }
+
+    func play(_ clip: Clip, speed: Double = 1) { animator.play(clip, speed: speed) }
+    /// Advance only this fighter's animation (tests / offscreen renders).
+    func animatorTick(_ dt: Double) { animator.tick(dt * animRate) }
+
     func apply(_ pose: Pose, duration: Double) {
-        for (j, e) in pose {
-            guard let n = joints[j] else { continue }
-            n.removeAction(forKey: "pose")
-            if duration <= 0 {
-                n.simdEulerAngles = e
-            } else {
-                let a = SCNAction.rotateTo(x: CGFloat(e.x), y: CGFloat(e.y), z: CGFloat(e.z), duration: duration, usesShortestUnitArc: true)
-                a.timingMode = .easeOut
-                n.runAction(a, forKey: "pose")
-            }
-        }
+        if duration <= 0 { animator.set(pose) } else { animator.play(Moves.hold(pose, duration)) }
     }
 
     /// Momentary pose, then return to stance.
     func strikeAndReturn(_ pose: Pose, hold: Double = 0.08, recover: Double = 0.14) {
-        for (j, e) in pose {
-            guard let n = joints[j] else { continue }
-            n.removeAction(forKey: "pose")
-            let back = FighterModel.stancePose[j] ?? .zero
-            n.runAction(.sequence([
-                .rotateTo(x: CGFloat(e.x), y: CGFloat(e.y), z: CGFloat(e.z), duration: 0.045, usesShortestUnitArc: true),
-                .wait(duration: hold),
-                .rotateTo(x: CGFloat(back.x), y: CGFloat(back.y), z: CGFloat(back.z), duration: recover, usesShortestUnitArc: true),
-            ]), forKey: "pose")
-        }
+        animator.play(Clip(name: "pose", keys: [Key(0.045, pose, ease: .snap), Key(0.045 + hold, pose)], blendOut: recover))
     }
 
-    func stance() { apply(FighterModel.stancePose, duration: 0.14) }
-
-    func idle() {
-        body.removeAction(forKey: "bob")
-        let up = SCNAction.moveBy(x: 0, y: 0.06, z: 0, duration: 0.6)
-        up.timingMode = .easeInEaseOut
-        body.runAction(.repeatForever(.sequence([up, up.reversed()])), forKey: "bob")
+    func stance() {
+        // Only leave held poses (dash, charge, beam…); strikes already settle back on their own.
+        if animator.isHolding { animator.play(Clip(name: "stance", keys: [Key(0.14, FighterModel.stancePose, body: .zero, rot: .zero, ease: .inOut)])) }
     }
 
-    func attack(_ i: Int) {
-        switch i % 5 {
-        case 0: // left jab
-            strikeAndReturn([.shoulderL: SIMD3(-1.6, 0, 0.05), .elbowL: SIMD3(-0.08, 0, 0), .spine: SIMD3(0.15, -0.35, 0)])
-        case 1: // right cross
-            strikeAndReturn([.shoulderR: SIMD3(-1.6, 0, -0.05), .elbowR: SIMD3(-0.08, 0, 0), .spine: SIMD3(0.18, 0.45, 0)])
-        case 2: // front kick
-            strikeAndReturn([.hipL: SIMD3(-1.55, 0, 0), .kneeL: SIMD3(0.05, 0, 0), .spine: SIMD3(-0.25, 0, 0)], hold: 0.1)
-        case 3: // uppercut
-            strikeAndReturn([.shoulderR: SIMD3(-2.7, 0, -0.1), .elbowR: SIMD3(-0.7, 0, 0), .spine: SIMD3(-0.15, 0.3, 0)], hold: 0.1)
-        default: // spinning back kick
-            strikeAndReturn([.hipR: SIMD3(-1.4, 0, -0.5), .kneeR: SIMD3(0.1, 0, 0), .spine: SIMD3(-0.2, -0.9, 0)], hold: 0.12)
-        }
+    func idle() {}
+
+    /// Combo string hit `i` (0-based). Returns the clip so callers can sync the hit to its impact frame.
+    @discardableResult
+    func attack(_ i: Int, speed: Double = 1) -> Clip {
+        let c = Moves.string[i % Moves.string.count]
+        animator.play(c, speed: speed)
+        return c
     }
 
-    func finisher() {
-        strikeAndReturn([
-            .shoulderL: SIMD3(-1.55, 0, -0.15), .elbowL: SIMD3(-0.05, 0, 0),
-            .shoulderR: SIMD3(-1.55, 0, 0.15), .elbowR: SIMD3(-0.05, 0, 0),
-            .spine: SIMD3(0.3, 0, 0),
-        ], hold: 0.14, recover: 0.2)
+    /// Heavy closing hit of a string (uppercut launcher / smash / flying kick).
+    @discardableResult
+    func finisher(_ variant: Int? = nil, speed: Double = 1) -> Clip {
+        comboStep += 1
+        let c = Moves.finishers[(variant ?? comboStep) % Moves.finishers.count]
+        animator.play(c, speed: speed)
+        return c
     }
 
-    func dash() { apply(FighterModel.dashPose, duration: 0.08) }
+    func dash() { animator.play(Moves.dash) }
 
-    func blast() {
-        strikeAndReturn([.shoulderR: SIMD3(-1.57, 0, 0.05), .elbowR: SIMD3(0, 0, 0), .spine: SIMD3(0, 0.5, 0),
-                         .shoulderL: SIMD3(-0.6, 0, 0.5), .elbowL: SIMD3(-1.6, 0, 0)], hold: 0.12)
+    private var shotSide = 0
+    /// Alternating one-hand shots; `big` uses the two-hand heavy shot.
+    @discardableResult
+    func blast(big: Bool = false) -> Clip {
+        shotSide += 1
+        let c = big ? Moves.shotBig : (shotSide % 2 == 1 ? Moves.shotR : Moves.shotL)
+        animator.play(c)
+        return c
     }
 
+    func stepBack() { animator.play(Moves.stepBack) }
+    func sidestep(_ dir: Float) { animator.play(Moves.sidestep(dir)) }
+    func charge() { animator.play(Moves.charge) }
+
+    private var hitSide = 0
     func hurt(heavy: Bool) {
-        let p: Pose = heavy
-            ? [.spine: SIMD3(-0.6, 0.2, 0), .head: SIMD3(-0.5, 0, 0),
-               .shoulderL: SIMD3(0.7, 0, 0.9), .shoulderR: SIMD3(0.7, 0, -0.9), .elbowL: SIMD3(-0.3, 0, 0), .elbowR: SIMD3(-0.3, 0, 0)]
-            : [.spine: SIMD3(-0.35, 0, 0), .head: SIMD3(-0.45, 0, 0)]
-        strikeAndReturn(p, hold: heavy ? 0.35 : 0.12, recover: 0.2)
+        if heavy {
+            animator.play(Moves.launched)
+        } else {
+            hitSide += 1
+            animator.play(hitSide % 2 == 0 ? Moves.hitGut : Moves.hitHead)
+        }
         flash()
     }
 
     func ko() {
         setAura(0)
-        body.removeAction(forKey: "bob")
-        apply([.spine: SIMD3(-0.4, 0, 0), .head: SIMD3(-0.6, 0, 0), .shoulderL: SIMD3(0.4, 0, 1.2), .shoulderR: SIMD3(0.4, 0, -1.2),
-               .elbowL: SIMD3(-0.2, 0, 0), .elbowR: SIMD3(-0.2, 0, 0), .hipL: SIMD3(-0.2, 0, 0.1), .kneeL: SIMD3(0.3, 0, 0),
-               .hipR: SIMD3(0.1, 0, -0.1), .kneeR: SIMD3(0.2, 0, 0)], duration: 0.3)
-        let fall = SCNAction.group([
-            .rotateTo(x: -1.45, y: 0, z: 0, duration: 0.5, usesShortestUnitArc: true),
-            .move(to: SCNVector3(0, 0.1, 0), duration: 0.5),
-        ])
-        fall.timingMode = .easeIn
-        body.runAction(fall)
+        animator.play(Moves.knockedOut)
     }
 
     func revive() {
-        body.removeAllActions()
-        body.simdEulerAngles = .zero
-        body.simdPosition = SIMD3(0, FighterModel.hover, 0)
-        stance()
-        idle()
+        animator.set(FighterModel.stancePose)
     }
 
     func victory() {
         setAura(1)
-        apply(FighterModel.victoryPose, duration: 0.3)
+        animator.play(Moves.victory)
     }
 
     // MARK: - FX helpers

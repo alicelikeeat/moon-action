@@ -76,6 +76,7 @@ final class GameViewController: UIViewController {
         let dt = lastTime == 0 ? 1.0 / 60 : min(1.0 / 20, t - lastTime)
         lastTime = t
         current?.update(dt: dt)
+        FighterModel.tickAll(dt)
         FighterModel.syncImported()
     }
 

@@ -192,6 +192,7 @@ extension BattleScreen {
         let t = opponent(of: s).current
         let dir = dirTo(a, t)
         moveTo(a, a.pos - dir * 3.2, 0.22)
+        a.model.stepBack()
         a.model.afterimage(in: fxRoot)
         Sound.play(.dodge)
         return true
@@ -228,7 +229,7 @@ extension BattleScreen {
         if simd_length(dest) > Tune.arenaRadius { dest = t.pos + SIMD2(rel.x * cos(-ang) - rel.y * sin(-ang), rel.x * sin(-ang) + rel.y * cos(-ang)) }
         let travel = c.def.speed.vanishTime
         moveTo(c, dest, travel)
-        c.model.stance()
+        c.model.sidestep(lateral)
         c.model.setVisible(false)
         timeline.after(travel) { c.model.setVisible(true) }
         Sound.play(.dodge)
@@ -274,37 +275,51 @@ extension BattleScreen {
             }))
             steps.append((dashT, {}))
         }
-        let interval: Double = style == .basic ? 0.16 : (style == .rush || style == .eclipse ? 0.085 : 0.12)
+        let rushy = style == .rush || style == .eclipse
+        let interval: Double = style == .basic ? 0.16 : (rushy ? 0.085 : 0.12)
+        let speed: Double = rushy ? 1.4 : (style == .basic ? 1.1 : 1.0)
         let nearBonus = RangeZone.of(d) == .near ? 1.1 : 1.0
         let per = power / Double(hits) * nearBonus
+        // Keyframed string: anticipation → impact → recovery for every hit, heavy finisher last.
+        let finisher = rushy ? Moves.smash : (Bool.random() ? Moves.uppercut : Moves.flyingKick)
+        let clips: [Clip] = (0..<hits).map { i in
+            if style == .basic { return Moves.basicString[i % Moves.basicString.count] }
+            if i == hits - 1 && hits > 2 { return finisher }
+            return Moves.string[(i + Int.random(in: 0...1) * 2) % Moves.string.count]
+        }
         for i in 0..<hits {
             let last = i == hits - 1
-            steps.append((i == 0 ? 0.02 : interval, { [weak self] in
+            let clip = clips[i]
+            let delay = i == 0 ? 0.02 : max(interval, clips[i - 1].impact / speed + 0.03)
+            steps.append((delay, { [weak self] in
                 guard let self else { return }
-                if last && hits > 2 { a.model.finisher() } else { a.model.attack(i) }
-                let target = o.current
-                guard !target.isKO, self.dist(a, target) < Tune.strikeRange else { return }
-                let aiChance = i == 0 ? self.aiDodgeChance : self.aiDodgeChance * 0.25
-                let heavy = last && style != .basic
-                self.applyHit(from: s, power: per * (last ? 1.4 : 1), stun: last ? 0.7 : 0.4,
-                              knock: heavy ? (style == .normal ? 9 : 13) : 1.5, heavy: heavy, aiDodge: aiChance,
-                              basic: style == .basic)
-                // Follow-up glide keeps combos connected.
-                if !last {
-                    let dir = self.dirTo(a, target)
-                    let gap = self.dist(a, target)
-                    if gap > Tune.meleeStop + 0.2 { self.moveTo(a, target.pos - dir * Tune.meleeStop, 0.06) }
+                a.model.play(clip, speed: speed)
+                // The hit lands on the clip's impact frame.
+                self.timeline.after(clip.impact / speed, tag: a) { [weak self] in
+                    guard let self else { return }
+                    let target = o.current
+                    guard !target.isKO, self.dist(a, target) < Tune.strikeRange else { return }
+                    let aiChance = i == 0 ? self.aiDodgeChance : self.aiDodgeChance * 0.25
+                    let heavy = last && style != .basic
+                    self.applyHit(from: s, power: per * (last ? 1.4 : 1), stun: last ? 0.7 : 0.4,
+                                  knock: heavy ? (style == .normal ? 9 : 13) : 1.5, heavy: heavy, aiDodge: aiChance,
+                                  basic: style == .basic)
+                    // Follow-up glide keeps combos connected.
+                    if !last {
+                        let dir = self.dirTo(a, target)
+                        let gap = self.dist(a, target)
+                        if gap > Tune.meleeStop + 0.2 { self.moveTo(a, target.pos - dir * Tune.meleeStop, 0.06) }
+                    }
                 }
             }))
         }
-        steps.append((0.05, { [weak self] in
+        steps.append(((clips.last?.impact ?? 0) / speed + 0.05, { [weak self] in
             guard let self else { return }
             s.chainOpenUntil = self.now + 0.55
             self.awardShard(s)
         }))
-        steps.append((style == .basic ? 0.22 : 0.18, {
+        steps.append((style == .basic ? 0.16 : 0.14, {
             a.busy = false
-            a.model.stance()
         }))
         timeline.sequence(tag: a, steps)
     }
@@ -315,20 +330,28 @@ extension BattleScreen {
         let a = s.current
         a.busy = true
         timeline.cancel(tag: a)
-        a.model.blast()
+        let first = a.model.blast(big: big)
         // Hand glow while charging the shot; kept small when the hand is right in front of the camera.
         let near = Float(camScale(a.model.handWorld))
         let glow = Toon.glowSprite(a.def.aura, size: CGFloat(0.35 * near))
         a.model.fistR.addChildNode(glow)
         glow.runAction(.scale(to: CGFloat(1 + near), duration: 0.2))
-        let interval = hits > 3 ? 0.085 : 0.12
-        var steps: [(Double, () -> Void)] = [(0.2, {})]
+        let interval = hits > 3 ? 0.1 : 0.14
+        // Shots release on the clip's impact frame; volleys alternate hands.
+        var steps: [(Double, () -> Void)] = [(first.impact + 0.06, {})]
         for i in 0..<hits {
             steps.append((i == 0 ? 0 : interval, { [weak self] in
                 guard let self else { return }
-                if i > 0 { a.model.blast() }
-                self.spawnProjectile(s, power: power / Double(hits), radius: big ? 0.5 : (small ? 0.18 : (hits == 1 ? 0.32 : 0.22)),
-                                     spread: hits > 1 ? Float(i % 2 == 0 ? 1 : -1) * Float(i) * 0.06 : 0)
+                let fire = { [weak self] in
+                    self?.spawnProjectile(s, power: power / Double(hits), radius: big ? 0.5 : (small ? 0.18 : (hits == 1 ? 0.32 : 0.22)),
+                                          spread: hits > 1 ? Float(i % 2 == 0 ? 1 : -1) * Float(i) * 0.06 : 0)
+                }
+                if i == 0 {
+                    fire()
+                } else {
+                    let c = a.model.blast()
+                    self.timeline.after(c.impact * 0.6, tag: a) { fire() }
+                }
             }))
         }
         steps.append((0.05, { [weak self] in
@@ -336,9 +359,8 @@ extension BattleScreen {
             guard let self else { return }
             s.chainOpenUntil = self.now + 0.55
         }))
-        steps.append((small ? 0.25 : 0.2, {
+        steps.append((small ? 0.2 : 0.16, {
             a.busy = false
-            a.model.stance()
         }))
         timeline.sequence(tag: a, steps)
     }
