@@ -88,8 +88,12 @@ final class BattleScreen: Screen {
         hud = BattleHUD(screen: self)
         // Intro camera: start in front of the enemy, sweep behind the player.
         let e = enemy.current
-        camPos = e.world3 + SIMD3(1.2, 1.8, 3.2)
-        camLook = e.chest
+        // In front of the enemy (toward the player), three-quarter angle, whole upper body in frame.
+        let toP = dirTo(e, player.current)
+        let fwd = SIMD3(toP.x, 0, toP.y)
+        let right = SIMD3(-toP.y, 0, toP.x)
+        camPos = e.world3 + fwd * 4.6 + right * 1.4 + SIMD3(0, 1.9, 0)
+        camLook = e.chest + SIMD3(0, 0.2, 0)
         shot = (pos: camPos, look: camLook, until: 1.0, snap: true)
         applyCamera(dt: 0)
     }
