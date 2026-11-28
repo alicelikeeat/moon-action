@@ -12,6 +12,11 @@ public enum Tune {
     public static let warningWindow = 0.35...0.5
     public static let switchCooldown = 10.0
     public static let moveTime = 0.3
+    /// Forward dash travel (swipe up), cancellable by a card.
+    public static let dashTime = 0.28
+    /// Recovery at the end of a back dash.
+    public static let backDashRecovery = 0.15
+    public static let paralysisChance = 0.25
     /// Gap (metres) used for each zone when moving into it.
     public static let zoneGap: [Zone: Double] = [.close: 2.2, .mid: 6.5, .long: 12.0]
     public static let dashGap = 1.6               // swipe up at close range: dash into the opponent's face

@@ -129,6 +129,35 @@ enum Moves {
         Key(0.08, FighterModel.dashPose, rot: SIMD3(0.35, 0, 0)),
     ], hold: true)
 
+    /// Forward dash (swipe up): torso pitched 35°, arms swept back, 0.28 s.
+    static let forwardDash = Clip(name: "forwardDash", keys: [
+        Key(0.06, P([(.spine, 0.35, 0, 0), (.head, -0.25, 0, 0), (.shoulderL, 0.9, 0, 0.45), (.shoulderR, 0.9, 0, -0.45),
+                     (.elbowL, -0.3, 0, 0), (.elbowR, -0.3, 0, 0), (.hipL, -0.2, 0, 0), (.hipR, 0.35, 0, 0), (.kneeL, 0.5, 0, 0), (.kneeR, 0.9, 0, 0)]),
+            body: SIMD3(0, -0.04, 0.1), rot: SIMD3(0.61, 0, 0), ease: .snap),
+        Key(0.24, P([(.spine, 0.3, 0, 0), (.shoulderL, 0.8, 0, 0.4), (.shoulderR, 0.8, 0, -0.4), (.kneeL, 0.4, 0, 0), (.kneeR, 0.8, 0, 0)]),
+            body: SIMD3(0, -0.02, 0.06), rot: SIMD3(0.55, 0, 0)),
+    ], blendOut: 0.12)
+
+    /// Back dash (swipe down): leaning back 20°, sliding away, short recovery crouch at the end.
+    static let backDash = Clip(name: "backDash", keys: [
+        Key(0.06, P([(.spine, -0.35, 0, 0), (.head, 0.15, 0, 0), (.shoulderL, -0.5, 0, 0.5), (.shoulderR, -0.5, 0, -0.5),
+                     (.hipL, -0.6, 0, 0.1), (.hipR, -0.3, 0, -0.1), (.kneeL, 0.9, 0, 0), (.kneeR, 0.6, 0, 0)]),
+            body: SIMD3(0, 0.06, -0.1), rot: SIMD3(-0.35, 0, 0), ease: .snap),
+        Key(0.3, P([(.spine, -0.25, 0, 0), (.kneeL, 0.8, 0, 0), (.kneeR, 0.6, 0, 0)]), body: SIMD3(0, 0.02, -0.08), rot: SIMD3(-0.3, 0, 0)),
+        Key(0.42, P([(.spine, 0.2, 0, 0), (.kneeL, 1.1, 0, 0), (.kneeR, 1.1, 0, 0), (.hipL, -0.8, 0, 0.1), (.hipR, -0.8, 0, -0.1)]),
+            body: SIMD3(0, -0.1, 0), ease: .out),
+    ], blendOut: 0.15)
+
+    /// Air recovery after a heavy knockback: tuck, quick back roll, land in stance.
+    static let airRecover = Clip(name: "airRecover", keys: [
+        Key(0.05, P([(.spine, 0.6, 0, 0), (.hipL, -1.6, 0, 0.1), (.hipR, -1.6, 0, -0.1), (.kneeL, 2.0, 0, 0), (.kneeR, 2.0, 0, 0),
+                     (.shoulderL, -0.8, 0, 0.3), (.shoulderR, -0.8, 0, -0.3)]), body: SIMD3(0, 0.45, -0.1)),
+        Key(0.26, P([(.spine, 0.6, 0, 0), (.hipL, -1.6, 0, 0.1), (.hipR, -1.6, 0, -0.1), (.kneeL, 2.0, 0, 0), (.kneeR, 2.0, 0, 0)]),
+            body: SIMD3(0, 0.35, -0.15), rot: SIMD3(-0.9, 0, 0), ease: .inOut),
+        Key(0.38, P([(.spine, 0.25, 0, 0), (.kneeL, 1.0, 0, 0), (.kneeR, 1.0, 0, 0), (.hipL, -0.7, 0, 0.1), (.hipR, -0.7, 0, -0.1)]),
+            body: SIMD3(0, -0.05, -0.1), rot: SIMD3(0, 0, 0), ease: .out),
+    ], blendOut: 0.18)
+
     static let stepBack = Clip(name: "stepBack", keys: [
         Key(0.07, P([(.spine, -0.3, 0, 0), (.kneeL, 1.2, 0, 0), (.kneeR, 1.2, 0, 0), (.hipL, -1.0, 0, 0.1), (.hipR, -0.8, 0, -0.1),
                      (.shoulderL, -0.4, 0, 0.6), (.shoulderR, -0.4, 0, -0.6)]), body: SIMD3(0, 0.2, 0), rot: SIMD3(-0.25, 0, 0)),

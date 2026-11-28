@@ -18,6 +18,13 @@ public struct FighterState: Sendable {
     public var phase: FighterPhase = .idle
     /// Game time at which a timed phase (moving / acting / stunned / vanishing) ends.
     public var phaseUntil: Double = 0
+    /// Kind of hitstun while `phase == .stunned`.
+    public internal(set) var hitstun: Hitstun = .none
+    /// Paralysis: until then, every second there is a 25 % chance the current action is interrupted.
+    public internal(set) var paralyzedUntil: Double = 0
+    public internal(set) var nextParalysisCheck: Double = 0
+    /// Recovery (cannot act) queued after the current movement, e.g. a back dash.
+    public internal(set) var pendingRecovery: Double = 0
     public var abilityUsed = false
     public var tenacityUsed = false
     /// Card / attack in progress.
@@ -106,6 +113,8 @@ public struct HitInfo: Sendable, Equatable {
     public let heavy: Bool
     public let hitIndex: Int
     public let comboHits: Int
+    /// Hitstun the defender was put in by this hit (`.none` under super armor).
+    public var stun: Hitstun = .combo
 }
 
 public enum BattleEvent: Sendable, Equatable {
@@ -132,6 +141,14 @@ public enum BattleEvent: Sendable, Equatable {
     case cinematic(side: Int, card: ArtsCard)
     /// Manual tag switch. `cover`: switched in while being comboed; `special`: matching cover tag knocked the attacker away.
     case tagged(side: Int, to: Int, cover: Bool, special: Bool)
+    /// Swipe movement: forward dash (0.28 s) or back dash (with a 0.15 s recovery).
+    case stepped(side: Int, forward: Bool, duration: Double)
+    /// Heavy knockback finished with an air recovery roll; the fighter is free again.
+    case recovered(side: Int)
+    /// Status ailments.
+    case stunApplied(side: Int, duration: Double)
+    case paralyzed(side: Int, duration: Double)
+    case paralysisJolt(side: Int)
 }
 
 /// Deterministic fixed-step battle simulation. Side 0 = player, side 1 = enemy.
@@ -222,8 +239,14 @@ public struct BattleEngine: Sendable {
             // Timed phases expire back to idle.
             switch f.phase {
             case .moving, .acting, .stunned, .vanishing:
-                if time >= f.phaseUntil {
+                if time >= f.phaseUntil, f.phase == .moving, f.pendingRecovery > 0 {
+                    f.phase = .acting
+                    f.phaseUntil = time + f.pendingRecovery
+                    f.pendingRecovery = 0
+                } else if time >= f.phaseUntil {
+                    if f.phase == .stunned && f.hitstun == .heavy { events.append(.recovered(side: s)) }
                     f.phase = .idle
+                    f.hitstun = .none
                     f.action = nil
                 }
             default: break
@@ -237,6 +260,7 @@ public struct BattleEngine: Sendable {
             if !f.isKO { f.vanish = min(Tune.vanishMax, f.vanish + Tune.vanishRegen * dt) }
             side.current = f
             sides[s] = side
+            stepParalysis(s, &events)
             refillHand(s, &events)
         }
         // A combo ends once the defender is free again.
@@ -274,9 +298,14 @@ public struct BattleEngine: Sendable {
                 target = Tune.zoneGap[zone.farther] ?? gap
             }
             guard abs(target - gap) > 0.01 else { return false }
-            moveGap(to: target, over: Tune.moveTime)
+            let forward = input == .moveForward
+            let travel = forward ? Tune.dashTime : Tune.moveTime
+            moveGap(to: target, over: travel)
             f.phase = .moving
-            f.phaseUntil = time + Tune.moveTime
+            // Back dash ends in a short recovery so it cannot be spammed for free; a forward dash can be card-cancelled.
+            f.phaseUntil = time + travel
+            f.pendingRecovery = forward ? 0 : Tune.backDashRecovery
+            events.append(.stepped(side: s, forward: forward, duration: travel))
         case .chargeBegin:
             guard f.phase == .idle || f.phase == .moving else { return false }
             f.phase = .charging
@@ -304,12 +333,39 @@ public struct BattleEngine: Sendable {
     }
 
     /// Lock a fighter in hitstun until `until` (cannot act, vanish or charge).
-    public mutating func stun(side s: Int, until: Double) {
+    public mutating func stun(side s: Int, until: Double, type: Hitstun = .combo) {
         guard !sides[s].current.isKO else { return }
-        let previous = sides[s].current.phase == .stunned ? sides[s].current.phaseUntil : 0
+        let wasStunned = sides[s].current.phase == .stunned
+        let previous = wasStunned ? sides[s].current.phaseUntil : 0
         sides[s].current.phase = .stunned
         sides[s].current.action = nil
         sides[s].current.phaseUntil = max(previous, until)
+        // An ailment is never downgraded by a hit landing during it.
+        if !(wasStunned && sides[s].current.hitstun.isAilment && !type.isAilment) { sides[s].current.hitstun = type }
+    }
+
+    /// Status stun: no actions, no vanish and no switching for `duration`.
+    public mutating func applyStun(side s: Int, duration: Double = Hitstun.stun.duration, _ events: inout [BattleEvent]) {
+        guard !sides[s].current.isKO else { return }
+        stun(side: s, until: time + duration, type: .stun)
+        events.append(.stunApplied(side: s, duration: duration))
+    }
+
+    /// Paralysis (10 s by default): every second a 25 % chance to interrupt whatever the fighter is doing.
+    public mutating func paralyze(side s: Int, duration: Double = 10, _ events: inout [BattleEvent]) {
+        guard !sides[s].current.isKO else { return }
+        sides[s].current.paralyzedUntil = time + duration
+        sides[s].current.nextParalysisCheck = time + 1
+        events.append(.paralyzed(side: s, duration: duration))
+    }
+
+    mutating func stepParalysis(_ s: Int, _ events: inout [BattleEvent]) {
+        let f = sides[s].current
+        guard !f.isKO, time < f.paralyzedUntil, time >= f.nextParalysisCheck else { return }
+        sides[s].current.nextParalysisCheck = time + 1
+        guard f.phase != .stunned, rng.chance(Tune.paralysisChance) else { return }
+        stun(side: s, until: time + Hitstun.jolt.duration, type: .jolt)
+        events.append(.paralysisJolt(side: s))
     }
 
     // MARK: Damage / KO

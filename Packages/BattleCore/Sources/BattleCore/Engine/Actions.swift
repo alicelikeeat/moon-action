@@ -197,7 +197,7 @@ extension BattleEngine {
         case .gravityBind(let duration):
             moveGap(to: Tune.zoneGap[.close] ?? 2.2, over: 0.25)
             sides[s].current = f
-            stun(side: 1 - s, until: time + duration)
+            applyStun(side: 1 - s, duration: duration, &events)
             f = sides[s].current
         case .kiBurst(let ki):
             sides[s].ki = min(Tune.kiMax, sides[s].ki + ki)
@@ -269,6 +269,7 @@ extension BattleEngine {
             return true
         }
         f.phase = .moving
+        f.pendingRecovery = 0
         f.phaseUntil = time + 0.25
         sides[s].current = f
         events.append(.sidestep(side: s, dir: dir))
@@ -371,7 +372,7 @@ extension BattleEngine {
         if time < t.counterUntil && kind != .basic {
             t.counterUntil = 0
             sides[d].current = t
-            stun(side: s, until: time + t.counterStun)
+            stun(side: s, until: time + t.counterStun, type: .stun)
             shots.removeAll { $0.owner == s }
             events.append(.countered(side: d))
             return
@@ -382,6 +383,9 @@ extension BattleEngine {
             sides[s].current = a
         }
         let reduction = time < t.shieldUntil ? t.shieldReduction : 0
+        // Light hitstun for an opening basic jab, combo stun inside a string, heavy knockback on the final hit.
+        let stunType: Hitstun = time < t.armorUntil ? .none
+            : (heavy ? .heavy : (kind == .basic && sides[s].comboHits == 0 ? .light : .combo))
         let melee = kind == .strike || kind == .basic
         // Strikes / basic melee use strike attack, blasts use blast attack, specials and ultimates the higher one.
         let base = kind == .blast ? a.stats.blastAtk : (melee ? a.stats.strikeAtk : max(a.stats.strikeAtk, a.stats.blastAtk))
@@ -404,12 +408,11 @@ extension BattleEngine {
         sides[s].comboHits += 1
         events.append(.hit(HitInfo(attacker: s, kind: kind, damage: dmg, crit: crit,
                                    matchup: Element.matchup(attacker: a.def.element, defender: t.def.element),
-                                   heavy: heavy, hitIndex: index, comboHits: sides[s].comboHits)))
+                                   heavy: heavy, hitIndex: index, comboHits: sides[s].comboHits, stun: stunType)))
         if reduction > 0 { events.append(.shieldBlocked(side: d)) }
         // Hit-lock: the defender cannot act or vanish until the combo ends.
-        if time >= t.armorUntil {
-            let lock = heavy ? 0.7 : (kind == .basic ? 0.32 : 0.45)
-            stun(side: d, until: time + lock)
+        if stunType != .none {
+            stun(side: d, until: time + stunType.duration, type: stunType)
             shots.removeAll { $0.owner == d }
             if heavy {
                 let far = kind == .special || kind == .ultimate

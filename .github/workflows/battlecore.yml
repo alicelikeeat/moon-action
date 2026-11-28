@@ -25,4 +25,4 @@ jobs:
         run: |
           set -o pipefail
           swift build -Xswiftc -warnings-as-errors 2>&1 | tail -40
-          swift test 2>&1 | tail -80
+          swift test 2>&1 | tee test.log | grep -E "error:|Executed|failed \(" || true; grep -q "Test Suite 'All tests' passed" test.log

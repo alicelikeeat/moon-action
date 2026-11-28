@@ -32,13 +32,12 @@ final class CoreBattleScreen: Screen {
     private var realTime: Double = 0
     private var hitStop: Double = 0
     private var slowUntil: Double = 0
-    private var shake: Float = 0
-    private var camKick = SIMD3<Float>(repeating: 0)
-    private var camPos = SIMD3<Float>(0, 3, -9)
-    private var camLook = SIMD3<Float>(0, 1.2, 0)
+    private let cam = BattleCameraController()
     private var comboW: Float = 0
     private var guardW: Float = 0
     private var finished = false
+    private var paralysisUntil: [Double] = [0, 0]
+    private let speedLineView = SpeedLinesView()
     private var gesture = ArenaGesture()
     private var liveTouches: [Int: UITouch] = [:]
     private var warnUntil: Double = 0
@@ -67,7 +66,7 @@ final class CoreBattleScreen: Screen {
         scene = arena.scene
         pointOfView = arena.camera
         if let cam = arena.camera.camera {
-            cam.fieldOfView = 50
+            cam.fieldOfView = CGFloat(BattleCameraController.FOV.neutral)
             cam.bloomIntensity = 0.25
             cam.bloomThreshold = 1.2
             cam.bloomBlurRadius = 5
@@ -382,7 +381,7 @@ final class CoreBattleScreen: Screen {
         SCNTransaction.commit()
         beam.runAction(.sequence([.wait(duration: duration), .fadeOut(duration: 0.2), .removeFromParentNode()]))
         Sound.play(.beam)
-        shake = max(shake, 0.06)
+        cam.shake = max(cam.shake, 0.06)
     }
 
     // MARK: - Engine events → presentation
@@ -417,6 +416,8 @@ final class CoreBattleScreen: Screen {
         case .vanished(let s):
             let m = model(s)
             m.afterimage(in: fx)
+            ghostTrail(m)
+            if s == 0 { cam.vanishCut(cameraContext(), vanisher: m.root.simdWorldPosition) }
             // Cyan vanish vortex around the fighter.
             let ring = SCNNode(geometry: SCNTorus(ringRadius: 0.7, pipeRadius: 0.035))
             ring.geometry?.materials = [Toon.energy(UIColor(hex: 0x7FE8FF), alpha: 0.85)]
@@ -478,12 +479,40 @@ final class CoreBattleScreen: Screen {
                                 : (L10n.isZH ? "援护换人 · COVER CHANGE" : "COVER CHANGE"),
                         color: special ? Theme.accent : Theme.energy, symbol: "person.2.fill")
                 if s == 0 { Haptics.medium.impactOccurred() }
-                if special { shake = max(shake, 0.12) }
+                if special { cam.shake = max(cam.shake, 0.12) }
             }
         case .battleOver(let w):
             finish(winner: w)
         case .comboEnded(let s, let hits):
             if s == 0 && hits >= 4 { popup(L10n.f("core.comboTotal", hits), over: 1, color: Theme.accent, size: 18, rise: 1.6) }
+        case .stepped(let s, let forward, let duration):
+            let m = model(s)
+            if forward {
+                m.play(Moves.forwardDash)
+                VFX.dashBurst(at: m.root.simdWorldPosition, forward: m.root.simdWorldFront, color: visual(s).aura, in: fx)
+                if s == 0 {
+                    cam.dashPulse(now: engine.time, duration: duration)
+                    speedLines(duration + 0.1)
+                }
+            } else {
+                m.play(Moves.backDash)
+                VFX.dust(at: m.root.simdWorldPosition + SIMD3(0, 0.1, 0), scale: 0.5, in: fx)
+            }
+            Sound.play(.dodge, pitch: forward ? 1.1 : 0.9)
+        case .recovered(let s):
+            model(s).play(Moves.airRecover)
+            Sound.play(.dodge, pitch: 1.4)
+        case .stunApplied(let s, let duration):
+            stunStars(s, duration: duration)
+            popup(L10n.isZH ? "眩晕" : "STUN", over: s, color: Theme.accent, size: 18)
+        case .paralyzed(let s, let duration):
+            paralysisUntil[s] = engine.time + duration
+            popup(L10n.isZH ? "麻痹" : "PARALYZED", over: s, color: UIColor(hex: 0xF2E15C), size: 18)
+        case .paralysisJolt(let s):
+            let m = model(s)
+            m.react(.head, heavy: false)
+            VFX.impact(at: m.chestWorld, color: UIColor(hex: 0xF2E15C), heavy: false, in: fx, dir: SIMD3(0, 1, 0), scale: 0.6)
+            Sound.play(.crack, pitch: 1.6)
         case .zoneChanged, .handChanged, .swing:
             break
         }
@@ -494,6 +523,59 @@ final class CoreBattleScreen: Screen {
         f.numberStyle = .decimal
         return f
     }()
+
+    // MARK: - Phase 2 juice
+
+    /// Three fading translucent copies left behind on a vanish.
+    private func ghostTrail(_ m: FighterModel) {
+        let back = -m.root.simdWorldFront
+        for i in 0..<3 {
+            let g = m.root.clone()
+            g.simdPosition = m.root.simdWorldPosition + back * Float(i) * 0.18
+            g.simdOrientation = m.root.simdWorldOrientation
+            g.opacity = CGFloat(0.5 - Double(i) * 0.14)
+            g.enumerateHierarchy { n, _ in n.particleSystems = nil }
+            fx.addChildNode(g)
+            g.runAction(.sequence([.wait(duration: Double(i) * 0.04), .fadeOut(duration: 0.3), .removeFromParentNode()]))
+        }
+    }
+
+    private func armorRipple(_ m: FighterModel) {
+        let ring = SCNNode(geometry: SCNTorus(ringRadius: 0.6, pipeRadius: 0.02))
+        ring.geometry?.materials = [Toon.energy(UIColor.white, alpha: 0.9)]
+        ring.simdPosition = m.chestWorld
+        ring.simdOrientation = m.root.simdWorldOrientation * simd_quatf(angle: .pi / 2, axis: SIMD3(1, 0, 0))
+        fx.addChildNode(ring)
+        ring.runAction(.sequence([.group([.scale(to: 1.8, duration: 0.2), .fadeOut(duration: 0.2)]), .removeFromParentNode()]))
+    }
+
+    /// Spinning star ring above the head while stunned.
+    private func stunStars(_ s: Int, duration: Double) {
+        let m = model(s)
+        let holder = SCNNode()
+        holder.simdPosition = SIMD3(0, 2.25 * m.def.look.height, 0)
+        for i in 0..<5 {
+            let star = SCNNode(geometry: SCNSphere(radius: 0.05))
+            star.geometry?.materials = [Toon.energy(UIColor(hex: 0xFFE27A), alpha: 1)]
+            let a = Float(i) / 5 * 2 * .pi
+            star.simdPosition = SIMD3(cos(a) * 0.3, 0, sin(a) * 0.3)
+            holder.addChildNode(star)
+        }
+        holder.runAction(.repeatForever(.rotateBy(x: 0, y: 2 * .pi, z: 0, duration: 0.8)))
+        holder.runAction(.sequence([.wait(duration: duration), .fadeOut(duration: 0.2), .removeFromParentNode()]))
+        m.root.addChildNode(holder)
+    }
+
+    private func speedLines(_ duration: Double) {
+        guard let v = host?.scnView else { return }
+        if speedLineView.superview == nil {
+            speedLineView.frame = v.bounds
+            speedLineView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            speedLineView.isUserInteractionEnabled = false
+            v.addSubview(speedLineView)
+        }
+        speedLineView.flash(duration)
+    }
 
     private func supportText(_ e: SupportEffect) -> String {
         switch e {
@@ -517,7 +599,18 @@ final class CoreBattleScreen: Screen {
         case .blast: react = .blast
         case .special, .ultimate: react = .launch
         }
-        dm.react(react, heavy: h.heavy)
+        switch h.stun {
+        case .none:
+            // Super armor: no flinch, white flash and a shield ripple.
+            dm.flash()
+            armorRipple(dm)
+        case .light:
+            dm.react(.head, heavy: false)
+        case .combo:
+            dm.react(react == .head || react == .gut ? .spin : react, heavy: false)
+        case .heavy, .stun, .jolt:
+            dm.react(react, heavy: h.heavy)
+        }
         let p = dm.chestWorld + SIMD3(0, 0.1, 0)
         let am = model(a)
         var dir = p - am.chestWorld
@@ -550,8 +643,8 @@ final class CoreBattleScreen: Screen {
         }
         popup(text, at: p + SIMD3(Float.random(in: -0.3...0.3), 0.5, 0), color: color, size: size)
         hitStop = max(hitStop, min(0.14, (h.heavy ? 0.1 : (h.kind == .basic ? 0.04 : 0.06)) + (h.crit ? 0.03 : 0)))
-        shake = max(shake, h.heavy ? 0.09 : 0.025)
-        camKick += SIMD3(dir.x, -0.1, dir.z) * (h.heavy ? 0.3 : 0.1)
+        cam.shake = max(cam.shake, h.heavy ? 0.09 : 0.025)
+        cam.kick += SIMD3(dir.x, -0.1, dir.z) * (h.heavy ? 0.3 : 0.1)
         if a == 0 || d == 0 {
             if h.heavy { Haptics.heavy.impactOccurred() } else { Haptics.light.impactOccurred() }
         }
@@ -643,49 +736,35 @@ final class CoreBattleScreen: Screen {
             let m = model(s)
             let p = worldPos(s)
             let o = worldPos(1 - s)
-            m.root.simdPosition = p
+            // Hover idle: ±0.08 m slow sine float (airborne arena).
+            let bob = engine.sides[s].current.isKO ? 0 : 0.08 * Float(sin(realTime * 1.8 + Double(s) * 1.3))
+            m.root.simdPosition = p + SIMD3(0, bob, 0)
             m.root.simdEulerAngles = SIMD3(0, atan2(o.x - p.x, o.z - p.z), 0)
         }
     }
 
     private func camScale(_ p: SIMD3<Float>) -> CGFloat {
-        CGFloat(max(0.35, min(1, simd_length(p - camPos) / 9)))
+        CGFloat(max(0.35, min(1, simd_length(p - cam.pos) / 9)))
     }
 
-    private func cameraTarget() -> (SIMD3<Float>, SIMD3<Float>) {
-        let p = worldPos(0), e = worldPos(1)
-        var f = e - p
-        f.y = 0
-        f = simd_length(f) > 1e-3 ? simd_normalize(f) : SIMD3(0, 0, 1)
-        let right = SIMD3<Float>(f.z, 0, -f.x) * -1
-        let gap = visualGap
-        // Special / ultimate startup: front close-up of the attacker.
-        for s in 0..<2 where engine.inCinematic {
-            if let k = engine.sides[s].current.action?.kind, k == .special || k == .ultimate {
-                let a = worldPos(s)
-                let fw = s == 0 ? f : -f
-                return (a + fw * 3.4 + right * (s == 0 ? 1 : -1) * 0.9 + SIMD3(0, 1.85, 0), model(s).chestWorld + SIMD3(0, 0.45, 0))
+    private func cameraContext() -> BattleCameraController.Context {
+        var closeUp: Int?
+        var chest = SIMD3<Float>(repeating: 0)
+        if engine.inCinematic {
+            for s in 0..<2 {
+                if let k = engine.sides[s].current.action?.kind, k == .special || k == .ultimate {
+                    closeUp = s
+                    chest = model(s).chestWorld
+                }
             }
         }
-        // DBL framing in neutral: behind the player, a little to the left, chest height — the player stands
-        // large right of center with the opponent ahead. Combos switch to the 3/4 side view below.
-        let mid = (p + e) / 2
-        var pos = p - f * (2.2 + gap * 0.06) - right * 0.95 + SIMD3(0, 1.6, 0)
-        var look = p + f * max(2.4, gap * 0.8) - right * 0.25 + SIMD3(0, 1.2, 0)
-        // Comboing: swing further to the side and close in on the exchange.
-        pos = simd_mix(pos, mid - f * 1.0 + right * (3.0 + gap * 0.1) + SIMD3(0, 1.35, 0), SIMD3(repeating: comboW))
-        look = simd_mix(look, mid + f * 0.3 + SIMD3(0, 1.2, 0), SIMD3(repeating: comboW))
-        // Being comboed: pull back a little to show both.
-        let g = guardW * (1 - comboW)
-        pos = simd_mix(pos, p - f * 4.2 + right * 2.6 + SIMD3(0, 2.2, 0), SIMD3(repeating: g))
-        look = simd_mix(look, mid + SIMD3(0, 1.1, 0), SIMD3(repeating: g))
-        return (pos, look)
+        return .init(player: worldPos(0), enemy: worldPos(1), gap: visualGap, comboW: comboW, guardW: guardW,
+                     closeUpSide: closeUp, closeUpChest: chest, now: engine.time)
     }
 
     private func snapCamera() {
-        (camPos, camLook) = cameraTarget()
-        arena.camera.simdPosition = camPos
-        arena.camera.simdLook(at: camLook, up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
+        cam.snap(cameraContext())
+        cam.update(cameraContext(), dt: 0, node: arena.camera)
     }
 
     private func updateCamera(dt: Float) {
@@ -693,18 +772,7 @@ final class CoreBattleScreen: Screen {
         let comboed = engine.sides[1].comboHits >= 2
         comboW += ((comboing ? 1 : 0) - comboW) * min(1, dt * 5)
         guardW += ((comboed ? 1 : 0) - guardW) * min(1, dt * 5)
-        let (tp, tl) = cameraTarget()
-        let k = engine.inCinematic ? 1 - exp(-dt * 10) : 1 - exp(-dt * 6)
-        camPos += (tp - camPos) * k
-        camLook += (tl - camLook) * k
-        var p = camPos + camKick
-        camKick *= max(0, 1 - dt * 14)
-        if shake > 0.001 {
-            p += SIMD3(Float.random(in: -shake...shake), Float.random(in: -shake...shake), Float.random(in: -shake...shake))
-            shake *= max(0, 1 - dt * 9)
-        }
-        arena.camera.simdPosition = p
-        arena.camera.simdLook(at: camLook, up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
+        cam.update(cameraContext(), dt: dt, node: arena.camera)
     }
 
     private func updateWarning() {

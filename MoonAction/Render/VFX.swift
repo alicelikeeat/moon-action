@@ -457,6 +457,25 @@ enum VFX {
         dust(at: SIMD3(p.x, 0.1, p.z), scale: 2.2, in: parent)
     }
 
+    /// Forward dash: white cone shock wave behind the feet plus a short trail.
+    static func dashBurst(at base: SIMD3<Float>, forward: SIMD3<Float>, color: UIColor, in parent: SCNNode) {
+        var back = -forward
+        back.y = 0
+        back = simd_length(back) > 1e-3 ? simd_normalize(back) : SIMD3(0, 0, -1)
+        let cone = SCNNode(geometry: SCNCone(topRadius: 0.05, bottomRadius: 0.45, height: 0.9))
+        cone.geometry?.materials = [Toon.energy(UIColor.white, alpha: 0.55)]
+        // Cone axis is +Y: point it backwards (wide end trailing).
+        cone.simdOrientation = simd_quatf(from: SIMD3(0, 1, 0), to: back)
+        cone.simdPosition = base + SIMD3(0, 0.35, 0) + back * 0.5
+        parent.addChildNode(cone)
+        cone.runAction(.sequence([.group([.scale(to: 1.6, duration: 0.25), .fadeOut(duration: 0.25)]), .removeFromParentNode()]))
+        let trail = sparks(color.lighter(0.5), count: 18, speed: 5, size: 0.06, life: 0.3)
+        trail.emittingDirection = SCNVector3(back.x, 0.15, back.z)
+        trail.spreadingAngle = 20
+        emitter(trail, at: base + SIMD3(0, 0.5, 0), in: parent)
+        dust(at: base + SIMD3(0, 0.1, 0), scale: 0.6, in: parent)
+    }
+
     /// Ground dust puff (dashes, knockdowns, landings).
     static func dust(at p: SIMD3<Float>, scale: CGFloat = 1, in parent: SCNNode) {
         let d = SCNParticleSystem()

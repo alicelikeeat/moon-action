@@ -4,7 +4,8 @@ extension BattleEngine {
         guard !over, i >= 0, i < sides[s].team.count, i != sides[s].active, !sides[s].team[i].isKO,
               time >= sides[s].switchReadyAt else { return false }
         let f = sides[s].current
-        return f.canAct || f.phase == .stunned
+        // Cover change is allowed in light / combo / heavy hitstun, never under a status ailment.
+        return f.canAct || (f.phase == .stunned && !f.hitstun.isAilment)
     }
 
     /// Seconds until the switch is available again (0 = ready).
