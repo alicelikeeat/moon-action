@@ -119,6 +119,7 @@ extension BattleEngine {
         let d = 1 - s
         let comboIndex = sides[d].current.phase == .stunned ? sides[s].comboCards + 1 : 1
         events.append(.cardPlayed(side: s, card: card, comboIndex: comboIndex))
+        gaugeOnCardPlayed(s, card, &events)
         events.append(.handChanged(side: s))
         var f = sides[s].current
         f.action = nil
@@ -394,6 +395,7 @@ extension BattleEngine {
             a.guaranteedCrit = false
             sides[s].current = a
         }
+        if gaugeDefends(defender: d, kind: kind, &events) { return }
         let reduction = time < t.shieldUntil ? t.shieldReduction : 0
         // Light hitstun for an opening basic jab, combo stun inside a string, heavy knockback on the final hit.
         let stunType: Hitstun = time < t.armorUntil ? .none
@@ -402,8 +404,8 @@ extension BattleEngine {
         // Strikes / basic melee use strike attack, blasts use blast attack, specials and ultimates the higher one.
         let base = kind == .blast ? a.stats.blastAtk : (melee ? a.stats.strikeAtk : max(a.stats.strikeAtk, a.stats.blastAtk))
         let atk = base * (1 + a.statBonus)
-        var up = a.stats.damageUp + a.damageBonus + bonus + sides[s].teamDamageBonus(at: time)
-        if kind == .special { up += a.stats.specialDamageUp }
+        var up = a.stats.damageUp + a.damageBonus + bonus + sides[s].teamDamageBonus(at: time) + gaugeDamageBonus(s)
+        if kind == .special { up += a.stats.specialDamageUp + (a.overload ? 0.2 : 0) }
         if kind == .ultimate { up += a.stats.ultimateDamageUp }
         // Per-hit share of the whole card's layered damage (defense is subtracted once per card).
         let cardMultiplier = max(power, cardTotal)
@@ -431,6 +433,7 @@ extension BattleEngine {
                 moveGap(to: far ? (Tune.zoneGap[.long] ?? 11) : (Tune.zoneGap[.mid] ?? 6.2) - 1.5, over: 0.3)
             }
         }
+        gaugeOnHitTaken(d, &events)
         events += damage(dmg, to: d)
     }
 }

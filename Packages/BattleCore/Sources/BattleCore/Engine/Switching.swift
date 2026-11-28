@@ -1,7 +1,7 @@
 extension BattleEngine {
     /// Can side `s` tag in member `i` now? Allowed while free or while being hit (cover change), on cooldown.
     public func canSwitch(side s: Int, to i: Int) -> Bool {
-        guard !over, i >= 0, i < sides[s].team.count, i != sides[s].active, !sides[s].team[i].isKO,
+        guard !over, clash == nil, rush == nil, i >= 0, i < sides[s].team.count, i != sides[s].active, !sides[s].team[i].isKO,
               time >= sides[s].switchReadyAt else { return false }
         let f = sides[s].current
         // Cover change is allowed in light / combo / heavy hitstun, never under a status ailment.

@@ -25,6 +25,11 @@ public struct FighterState: Sendable {
     public internal(set) var nextParalysisCheck: Double = 0
     /// Recovery (cannot act) queued after the current movement, e.g. a back dash.
     public internal(set) var pendingRecovery: Double = 0
+    /// Unique gauge 0…100 and its states.
+    public internal(set) var gauge: Double = 0
+    public internal(set) var overload = false
+    public internal(set) var counterUses = 0
+    public internal(set) var attackBurstUntil: Double = 0
     public var abilityUsed = false
     public var tenacityUsed = false
     /// Card / attack in progress.
@@ -101,6 +106,10 @@ public enum Input: Sendable, Equatable {
     case chargeBegin      // long press began
     case chargeEnd        // long press ended
     case play(Int)        // hand slot 0…3
+    case clashTap         // lock the clash bar
+    case risingRush       // 7 orbs: unleash the rush
+    case rushPick(Int)    // attacker: card the defender must guess
+    case rushGuess(Int)   // defender: guess one of 4
     case switchTo(Int)    // team member index (tag switch / cover change while being hit)
 }
 
@@ -156,6 +165,19 @@ public enum BattleEvent: Sendable, Equatable {
     case inputBuffered(side: Int, slot: Int)
     case comboRoute(side: Int, route: ComboRoute)
     case comboDropped(side: Int)
+    /// Unique gauges.
+    case gaugeTriggered(side: Int, type: UniqueGaugeType)
+    case autoEvaded(side: Int)
+    /// Strike clash.
+    case clashStarted(until: Double)
+    case clashLocked(side: Int, score: Int)
+    case clashResolved(winner: Int?, scores: [Int])
+    /// Rising Rush.
+    case rushStarted(side: Int)
+    case rushMissed(side: Int)
+    case rushGuessing(defender: Int, until: Double)
+    case rushParried(side: Int)
+    case rushFinish(side: Int)
 }
 
 /// Deterministic fixed-step battle simulation. Side 0 = player, side 1 = enemy.
@@ -170,6 +192,10 @@ public struct BattleEngine: Sendable {
     public var timerPaused = false
     /// Seconds of timer pause owed to a running cinematic (special / ultimate startup).
     var cinematicUntil: Double = 0
+    /// Strike clash in progress (both strike cards collided).
+    public internal(set) var clash: ClashState?
+    /// Rising Rush in progress.
+    public internal(set) var rush: RushState?
     public var rng: SplitMix64
     public internal(set) var shots: [Shot] = []
 
@@ -237,6 +263,10 @@ public struct BattleEngine: Sendable {
             lastZone = z
             events.append(.zoneChanged(z))
         }
+        checkClash(&events)
+        stepClash(&events)
+        stepRush(&events)
+        stepGauges(dt, &events)
         stepActions(&events)
         stepCombos(&events)
         stepShots(&events)
@@ -296,8 +326,21 @@ public struct BattleEngine: Sendable {
     @discardableResult
     public mutating func apply(_ input: Input, side s: Int, events: inout [BattleEvent]) -> Bool {
         guard !over else { return false }
+        // Clash / rush lock all other input.
+        if clash != nil { return input == .clashTap ? lockClash(s, &events) : false }
+        if rush != nil {
+            switch input {
+            case .rushPick(let slot): return rushPick(s, slot: slot)
+            case .rushGuess(let slot): return rushGuess(s, slot: slot, &events)
+            default: return false
+            }
+        }
         var f = sides[s].current
         switch input {
+        case .clashTap, .rushPick, .rushGuess:
+            return false
+        case .risingRush:
+            return startRush(s, &events)
         case .moveForward, .moveBack:
             let route = input == .moveForward && routeOpen(s)
             guard f.canAct || route else { return false }
