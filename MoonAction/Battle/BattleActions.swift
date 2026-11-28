@@ -316,9 +316,11 @@ extension BattleScreen {
         a.busy = true
         timeline.cancel(tag: a)
         a.model.blast()
-        let glow = Toon.glowSprite(a.def.aura, size: 0.5)
+        // Hand glow while charging the shot; kept small when the hand is right in front of the camera.
+        let near = Float(camScale(a.model.handWorld))
+        let glow = Toon.glowSprite(a.def.aura, size: CGFloat(0.35 * near))
         a.model.fistR.addChildNode(glow)
-        glow.runAction(.scale(to: 2.2, duration: 0.2))
+        glow.runAction(.scale(to: CGFloat(1 + near), duration: 0.2))
         let interval = hits > 3 ? 0.085 : 0.12
         var steps: [(Double, () -> Void)] = [(0.2, {})]
         for i in 0..<hits {
@@ -717,6 +719,7 @@ extension BattleScreen {
         t.knockVel = .zero
         t.pos = a.pos + dir * 1.35
         t.invulnUntil = max(t.invulnUntil, now + 0.35)
+        snapCamera = true
         if !a.isKO {
             timeline.cancel(tag: a)
             a.busy = false

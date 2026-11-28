@@ -28,6 +28,8 @@ final class BattleScreen: Screen {
     var hitShakeAmp: Float = 0
     /// Directional camera kick (pushed along the hit direction, springs back).
     var camKick = SIMD3<Float>(repeating: 0)
+    /// Jump the follow camera to its new spot next frame (after a teleport) instead of sweeping through fighters.
+    var snapCamera = false
     var hud: BattleHUD!
     var startZone: RangeZone = .mid
     var fxRoot = SCNNode()
@@ -292,6 +294,10 @@ final class BattleScreen: Screen {
             if s.snap { k = 1 }
         } else {
             shot = nil
+            if snapCamera {
+                k = 1
+                snapCamera = false
+            }
             let p = player.current
             let e = enemy.current
             let f2 = dirTo(p, e)
@@ -334,8 +340,10 @@ final class BattleScreen: Screen {
         let f2 = dirTo(c, t)
         let f = SIMD3(f2.x, 0, f2.y)
         let right = SIMD3(-f2.y, 0, f2.x)
-        let pos = c.world3 + f * distance + right * side + SIMD3(0, height, 0)
-        return (pos, c.chest + SIMD3(0, 0.25, 0))
+        // Frame head to waist (the face, not the chest), far enough for tall imported models.
+        let d = max(distance, 3.2)
+        let pos = c.world3 + f * d + right * side + SIMD3(0, height + 0.25, 0)
+        return (pos, c.chest + SIMD3(0, 0.45, 0))
     }
 
     func sideShot(_ a: Combatant, _ b: Combatant, distance: Float = 7) -> (SIMD3<Float>, SIMD3<Float>) {
