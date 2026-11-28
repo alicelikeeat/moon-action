@@ -36,7 +36,7 @@ final class CoreBattleSmokeTests: XCTestCase {
 final class ProgressionSmokeTests: XCTestCase {
     func testLoadoutBattleWithULIntroRuns() {
         let p = [FighterLoadout(def: FighterRoster.kross), FighterLoadout(def: FighterRoster.kai), FighterLoadout(def: FighterRoster.lan)]
-        let e = [FighterLoadout(def: FighterRoster.nova, level: 100, stars: 1)]
+        let e = [FighterLoadout(def: FighterRoster.nova), FighterLoadout(def: FighterRoster.sephi), FighterLoadout(def: FighterRoster.sera)]
         let b = CoreBattleScreen(playerLoadouts: p, enemyLoadouts: e, difficulty: .novice, seed: 4, progression: false)
         b.ui.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
         b.build()
