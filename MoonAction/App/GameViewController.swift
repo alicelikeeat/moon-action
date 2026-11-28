@@ -99,6 +99,7 @@ enum Demo {
         case "team": return TeamScreen()
         case "summon": return SummonScreen()
         case "viewer": return ViewerScreen(focus: "aria")
+        case "creator": return CreatorScreen()
         case "cheats": return HomeScreen()
         case "battle", "ultimate", "special":
             let ids = ["aria", "kai", "luna"]

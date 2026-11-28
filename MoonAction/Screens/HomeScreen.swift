@@ -97,17 +97,23 @@ final class HomeScreen: Screen {
         let viewer = Glass.button(L("home.viewer"), symbol: "cube.transparent", style: .secondary, fontSize: 15) { [weak self] in
             self?.go(ViewerScreen())
         }
-        let cheats = Glass.button(L("home.cheats"), symbol: "wand.and.stars", style: .secondary,
-                                  tint: Cheats.anyOn ? Theme.ultimate.withAlphaComponent(0.55) : nil, fontSize: 15) { [weak self] in
+        let cheats = Glass.button(L("home.cheats"), symbol: "wand.and.stars", style: Cheats.anyOn ? .secondary : .regular,
+                                  tint: Cheats.anyOn ? Theme.ultimate.withAlphaComponent(0.55) : nil, fontSize: 13) { [weak self] in
             self?.showCheats()
         }
-        let row2 = UIStackView(arrangedSubviews: [viewer, cheats])
+        let creator = Glass.button(L("home.creator"), symbol: "paintpalette.fill", style: .secondary, fontSize: 15) { [weak self] in
+            self?.go(CreatorScreen())
+        }
+        let row2 = UIStackView(arrangedSubviews: [viewer, creator])
         row2.spacing = 10
         row2.distribution = .fillEqually
         let help = Glass.button(L("home.help"), symbol: "questionmark.circle", style: .regular, fontSize: 13) { [weak self] in
             self?.showHelp()
         }
-        let menu = UIStackView(arrangedSubviews: [battle, row, row2, help])
+        let row3 = UIStackView(arrangedSubviews: [cheats, help])
+        row3.spacing = 10
+        row3.distribution = .fillEqually
+        let menu = UIStackView(arrangedSubviews: [battle, row, row2, row3])
         menu.axis = .vertical
         menu.spacing = 10
         menu.setCustomSpacing(16, after: row2)
@@ -145,6 +151,7 @@ final class HomeScreen: Screen {
             battle.heightAnchor.constraint(equalToConstant: 60),
             fighters.heightAnchor.constraint(equalToConstant: 48),
             viewer.heightAnchor.constraint(equalToConstant: 48),
+            cheats.heightAnchor.constraint(equalToConstant: 38),
             help.heightAnchor.constraint(equalToConstant: 38),
 
             footer.centerXAnchor.constraint(equalTo: ui.centerXAnchor),

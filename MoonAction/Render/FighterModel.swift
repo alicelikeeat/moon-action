@@ -213,7 +213,7 @@ final class FighterModel {
             var v = u
             if v.y < 0 {
                 let k = pow(-v.y, 1.3)
-                v.x *= 1 - 0.36 * k
+                v.x *= 1 - 0.36 * L.jaw * k
                 if v.z > 0 { v.z *= 1 + 0.07 * k }
             }
             if v.z < 0 { v.z *= 1.05 }
@@ -327,21 +327,24 @@ final class FighterModel {
 
     private func buildFace(_ mb: MeshBuilder, _ headP: SIMD3<Float>) {
         typealias Bd = MeshBuilder.Bind
-        let sharp = def.speed == .fast
+        let L = def.look
+        let sharp = L.eyeShape < 0 ? def.speed == .fast : L.eyeShape == 1
+        let e = L.eyeScale
         for s in [Float(1), Float(-1)] {
             let q = simd_quatf(angle: s * 0.4, axis: SIMD3(0, 1, 0))
-            let c = headP + SIMD3(s * 0.058, -0.008, 0.138)
-            mb.ellipsoid(center: c, radii: SIMD3(0.036, sharp ? 0.036 : 0.043, 0.012), bind: Bd(B.head), slot: S.white, rings: 6, sides: 12,
+            let c = headP + SIMD3(s * 0.058 * L.eyeGap, -0.008, 0.138)
+            mb.ellipsoid(center: c, radii: SIMD3(0.036 * e, (sharp ? 0.036 : 0.043) * e, 0.012), bind: Bd(B.head), slot: S.white, rings: 6, sides: 12,
                          rotation: q * simd_quatf(angle: sharp ? -s * 0.18 : 0, axis: SIMD3(0, 0, 1)))
-            mb.ellipsoid(center: c + q.act(SIMD3(-s * 0.004, -0.002, 0.008)), radii: SIMD3(0.022, sharp ? 0.03 : 0.035, 0.01),
+            mb.ellipsoid(center: c + q.act(SIMD3(-s * 0.004, -0.002, 0.008) * e), radii: SIMD3(0.022 * e, (sharp ? 0.03 : 0.035) * e, 0.01),
                          bind: Bd(B.head), slot: S.iris, rings: 6, sides: 12, rotation: q)
-            mb.ellipsoid(center: c + q.act(SIMD3(-s * 0.009, -0.006, 0.014)), radii: SIMD3(0.011, 0.016, 0.006),
+            mb.ellipsoid(center: c + q.act(SIMD3(-s * 0.009, -0.006, 0.014) * e), radii: SIMD3(0.011 * e, 0.016 * e, 0.006),
                          bind: Bd(B.head), slot: S.dark, rings: 4, sides: 8, rotation: q)
-            mb.ellipsoid(center: c + q.act(SIMD3(s * 0.006, 0.012, 0.017)), radii: SIMD3(0.007, 0.009, 0.004),
+            mb.ellipsoid(center: c + q.act(SIMD3(s * 0.006, 0.012, 0.017) * e), radii: SIMD3(0.007 * e, 0.009 * e, 0.004),
                          bind: Bd(B.head), slot: S.white, rings: 4, sides: 6, rotation: q)
-            // Brow
-            let inner = headP + SIMD3(s * 0.028, 0.048, 0.152)
-            let outer = headP + SIMD3(s * 0.095, sharp ? 0.07 : 0.058, 0.128)
+            // Brow (follows eye size/spacing; tilt: + fierce, - soft)
+            let lift = (e - 1) * 0.04
+            let inner = headP + SIMD3(s * 0.028 * L.eyeGap, 0.048 + lift - L.browTilt * 0.012, 0.152)
+            let outer = headP + SIMD3(s * 0.095 * L.eyeGap, (sharp ? 0.07 : 0.058) + lift + L.browTilt * 0.014, 0.128)
             mb.strand(inner, inner + (outer - inner) * 0.33 + SIMD3(0, 0.006, 0.004), inner + (outer - inner) * 0.66 + SIMD3(0, 0.006, 0.002), outer,
                       width: 0.011, flatten: 0.5, taper: 0.6, bind: Bd(B.head), slot: S.brow, segments: 4, sides: 5, ref: SIMD3(0, 0, 1))
         }

@@ -9,7 +9,7 @@ final class ViewerScreen: Screen {
     private var model: FighterModel?
     private let fx = SCNNode()
     private let timeline = Timeline()
-    private var ids: [String] = Roster.all.map { $0.id }
+    private var ids: [String] = Roster.playable.map { $0.id }
     private var index = 0
 
     // Orbit camera (current values ease towards the targets)

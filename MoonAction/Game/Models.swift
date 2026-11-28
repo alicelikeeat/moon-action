@@ -63,6 +63,12 @@ struct Look {
     var gloves: Bool = false
     var cape: Bool = false
     var headband: Bool = false
+    // Face sliders (character creator); defaults reproduce the original roster faces.
+    var eyeScale: Float = 1
+    var eyeGap: Float = 1
+    var eyeShape: Int = -1        // -1 auto (by speed class), 0 round, 1 sharp
+    var browTilt: Float = 0       // -1 soft … 1 fierce
+    var jaw: Float = 1            // V-line strength
 }
 
 /// All fighters, names, looks and moves in Moon Action are original creations.
@@ -107,7 +113,13 @@ private func c(_ hex: UInt32) -> UIColor { UIColor(hex: hex) }
 enum Roster {
     static let all: [FighterDef] = [kai, luna, rook, ivy, nyx, blaze, mira, taro, zephyr, sable, orion, kira, drake, aria, bram, vex, rin, juno, kael, nova]
 
-    static func byID(_ id: String) -> FighterDef { all.first { $0.id == id } ?? kai }
+    static func byID(_ id: String) -> FighterDef {
+        if id == CustomFighter.id, let d = CustomFighter.def { return d }
+        return all.first { $0.id == id } ?? kai
+    }
+
+    /// Roster shown to the player: the created character (if any) first, then the 20 originals.
+    static var playable: [FighterDef] { (CustomFighter.def.map { [$0] } ?? []) + all }
 
     static let eclipseCard = Card(id: "eclipse", name: Text("Eclipse Rush", "月蚀突袭"), kind: .eclipse, cost: 0, power: 4.2, hits: 9)
 

@@ -148,7 +148,8 @@ final class TeamScreen: Screen {
         grid.translatesAutoresizingMaskIntoConstraints = false
         scroll.addSubview(grid)
         var row: UIStackView?
-        for (i, def) in Roster.all.enumerated() {
+        let roster = Roster.playable
+        for (i, def) in roster.enumerated() {
             if i % 5 == 0 {
                 let r = UIStackView()
                 r.spacing = 6
@@ -160,6 +161,9 @@ final class TeamScreen: Screen {
             tile.onTap = { [weak self] in self?.toggle(def.id) }
             tiles[def.id] = tile
             row?.addArrangedSubview(tile)
+        }
+        if let r = row {
+            for _ in 0..<((5 - roster.count % 5) % 5) { r.addArrangedSubview(UIView()) }
         }
         ui.addSubview(gridPanel)
 
