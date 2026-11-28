@@ -6,7 +6,7 @@ extension BattleScreen {
     /// 1 far from the camera, down to ~0.35 for effects right in front of the over-shoulder camera.
     func camScale(_ p: SIMD3<Float>) -> CGFloat {
         guard let cam = pointOfView else { return 1 }
-        return CGFloat(max(0.35, min(1, simd_length(p - cam.simdWorldPosition) / 7)))
+        return CGFloat(max(0.35, min(1, simd_length(p - cam.simdWorldPosition) / 9)))
     }
 
     func spark(at p: SIMD3<Float>, color: UIColor, big: Bool, dir: SIMD3<Float>? = nil) {

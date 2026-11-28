@@ -214,13 +214,13 @@ enum VFX {
     /// `scale` shrinks the flash for impacts close to the camera (hits on the player's own fighter).
     static func impact(at p: SIMD3<Float>, color: UIColor, heavy: Bool, in parent: SCNNode, dir: SIMD3<Float>? = nil, scale k: CGFloat = 1) {
         if let dir { directional(at: p, dir: dir, color: color, heavy: heavy, in: parent, scale: k) }
-        let star = billboard(starburst, color: color.lighter(0.5), size: (heavy ? 1.4 : 0.8) * k, intensity: 2.2 * min(1, k + 0.2))
+        let star = billboard(starburst, color: color.lighter(0.5), size: (heavy ? 0.95 : 0.6) * k, intensity: 1.5 * min(1, k + 0.2))
         star.simdEulerAngles.z = Float.random(in: 0..<(2 * .pi))
         star.scale = SCNVector3(0.3, 0.3, 0.3)
         star.runAction(.sequence([.scale(to: 1, duration: 0.05), .group([.scale(to: 1.25, duration: 0.12), .fadeOut(duration: 0.12)])]))
         spawn(star, at: p, in: parent, life: 0.3)
 
-        let ringNode = billboard(ring, color: color, size: (heavy ? 1.2 : 0.7) * k, intensity: 2.5 * min(1, k + 0.2))
+        let ringNode = billboard(ring, color: color, size: (heavy ? 1.0 : 0.6) * k, intensity: 1.8 * min(1, k + 0.2))
         ringNode.scale = SCNVector3(0.2, 0.2, 0.2)
         ringNode.runAction(.group([.scale(to: heavy ? 2.6 : 1.8, duration: 0.25), .fadeOut(duration: 0.25)]))
         spawn(ringNode, at: p, in: parent, life: 0.4)
@@ -267,7 +267,7 @@ enum VFX {
         s.propertyControllers = [.color: colorRamp([.white, color.lighter(0.4), color], [0, 0.35, 1]), .opacity: ramp([1, 0])]
         emitter(s, at: p, in: parent, life: 0.5)
         // Flat elongated flash across the impact, oriented by the hit direction.
-        let slash = billboard(Toon.glowImage, color: .white, size: (heavy ? 1.6 : 1.0) * k, intensity: 2.2 * min(1, k + 0.2))
+        let slash = billboard(Toon.glowImage, color: .white, size: (heavy ? 1.15 : 0.75) * k, intensity: 1.5 * min(1, k + 0.2))
         slash.scale = SCNVector3(1.0, 0.16, 1)
         slash.eulerAngles.z = Float.random(in: -0.6...0.6)
         slash.runAction(.sequence([.wait(duration: 0.03), .group([.scale(to: 0.01, duration: 0.1), .fadeOut(duration: 0.1)])]))
