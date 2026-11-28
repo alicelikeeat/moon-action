@@ -46,4 +46,26 @@ final class AnimationTests: XCTestCase {
         FighterModel.tickAll(0.2)
         XCTAssertEqual(angle(m, .shoulderL), before)
     }
+
+    func testHitReactionMapping() {
+        XCTAssertEqual(HitReact.of(Moves.jab), .head)
+        XCTAssertEqual(HitReact.of(Moves.bodyBlow), .gut)
+        XCTAssertEqual(HitReact.of(Moves.roundhouse), .spin)
+        XCTAssertEqual(HitReact.of(Moves.lowSweep), .trip)
+        XCTAssertEqual(HitReact.of(Moves.smash), .slam)
+        XCTAssertEqual(HitReact.of(Moves.uppercut), .launch)
+    }
+
+    /// Knockdowns keep the defender stunned long enough to get back up.
+    func testKnockdownStunCoversGetUp() {
+        let b = BattleScreen(playerIDs: ["kai", "luna", "rook"], enemyIDs: ["nyx", "blaze", "ivy"], enemyLevel: 1, stage: 1)
+        b.ui.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        b.build()
+        b.started = true
+        b.damageVariance = { 1 }
+        b.roll = { _ in false }
+        XCTAssertTrue(b.applyHit(from: b.player, power: 0.05, stun: 0.4, knock: 1.5, heavy: false, aiDodge: 0, react: .trip))
+        XCTAssertGreaterThanOrEqual(b.enemy.current.stunUntil - b.now, HitReact.trip.minStun - 1e-6)
+        XCTAssertEqual(b.enemy.current.model.animatorClipName, "trip")
+    }
 }

@@ -364,3 +364,82 @@ extension Moves {
         Key(0.34, R([(.spine, 0.5, 0, 0)]), body: SIMD3(0, -0.3, 0)),
     ], blendOut: 0.22)
 }
+
+// MARK: - Hit reactions
+
+/// How a hit lands on the defender (chosen from the attacking move).
+enum HitReact {
+    case head, gut, spin, trip, slam, launch, blast
+
+    /// Light reaction for a move, and its heavy (finisher) version.
+    static func of(_ clip: Clip) -> HitReact {
+        switch clip.name {
+        case "bodyBlow", "knee": return .gut
+        case "hook", "roundhouse", "sideKick", "spinKick", "backfist": return .spin
+        case "lowSweep": return .trip
+        case "smash", "axeKick": return .slam
+        case "uppercut", "flyingKick", "tornadoKick", "doublePalm", "tackle", "flyingPunch": return .launch
+        default: return .head
+        }
+    }
+
+    /// Knockdowns need longer stun so the defender is not free while still on the ground.
+    var minStun: Double {
+        switch self {
+        case .trip, .slam: return 0.95
+        default: return 0
+        }
+    }
+}
+
+extension Moves {
+    private static func H(_ e: [(Joint, Float, Float, Float)]) -> Pose {
+        var p: Pose = [:]
+        for (j, x, y, z) in e { p[j] = SIMD3(x, y, z) }
+        return p
+    }
+
+    /// Hooked / kicked from the side: torso and head twist away.
+    static func hitSpin(_ dir: Float) -> Clip {
+        Clip(name: "hitSpin", keys: [
+            Key(0.04, H([(.spine, -0.15, dir * 0.8, dir * 0.25), (.head, -0.2, dir * 0.7, 0), (.shoulderL, -0.3, 0, 0.9), (.shoulderR, -0.3, 0, -0.9),
+                         (.elbowL, -0.8, 0, 0), (.elbowR, -0.8, 0, 0)]), body: SIMD3(dir * 0.08, -0.03, -0.06), rot: SIMD3(0, dir * 0.55, 0), ease: .snap),
+            Key(0.22, H([(.spine, -0.05, dir * 0.4, 0.1)]), body: SIMD3(dir * 0.06, -0.04, -0.1), rot: SIMD3(0, dir * 0.3, 0)),
+        ], blendOut: 0.22)
+    }
+
+    /// Energy shot: shield with forearms, pushed back.
+    static let hitBlast = Clip(name: "hitBlast", keys: [
+        Key(0.05, H([(.spine, -0.35, 0, 0), (.head, 0.2, 0, 0), (.shoulderL, -1.6, 0, -0.2), (.elbowL, -2.0, 0, 0),
+                     (.shoulderR, -1.6, 0, 0.2), (.elbowR, -2.0, 0, 0), (.kneeL, 0.9, 0, 0), (.kneeR, 0.9, 0, 0)]),
+            body: SIMD3(0, -0.05, -0.18), ease: .snap),
+        Key(0.24, H([(.spine, -0.15, 0, 0)]), body: SIMD3(0, -0.06, -0.24)),
+    ], blendOut: 0.2)
+
+    /// Swept: legs taken out, fall on the back, kip-up (~1 s).
+    static let trip = Clip(name: "trip", keys: [
+        Key(0.06, H([(.spine, -0.4, 0, 0), (.head, -0.3, 0, 0), (.hipL, -1.3, 0, 0.1), (.hipR, -1.1, 0, -0.1), (.kneeL, 0.3, 0, 0), (.kneeR, 0.4, 0, 0),
+                     (.shoulderL, -0.6, 0, 1.2), (.shoulderR, -0.6, 0, -1.2)]), body: SIMD3(0, 0.3, 0), rot: SIMD3(-0.9, 0, 0), ease: .snap),
+        Key(0.28, H([(.spine, 0.1, 0, 0), (.head, 0.2, 0, 0), (.hipL, -0.6, 0, 0.1), (.hipR, -0.4, 0, -0.1)]),
+            body: SIMD3(0, -0.12, -0.15), rot: SIMD3(-1.5, 0, 0), ease: .inQuad),
+        Key(0.36, [:], body: SIMD3(0, -0.06, -0.15), rot: SIMD3(-1.45, 0, 0), ease: .out),
+        Key(0.6, [:], body: SIMD3(0, -0.14, -0.15), rot: SIMD3(-1.5, 0, 0), ease: .inOut),
+        Key(0.74, H([(.spine, 0.9, 0, 0), (.hipL, -1.9, 0, 0.1), (.hipR, -1.9, 0, -0.1), (.kneeL, 2.2, 0, 0), (.kneeR, 2.2, 0, 0),
+                     (.shoulderL, -2.6, 0, 0.3), (.shoulderR, -2.6, 0, -0.3)]), body: SIMD3(0, 0.05, -0.1), rot: SIMD3(-1.9, 0, 0), ease: .inOut),
+        Key(0.88, H([(.spine, 0.45, 0, 0), (.hipL, -1.0, 0, 0.2), (.hipR, -0.6, 0, -0.2), (.kneeL, 1.5, 0, 0), (.kneeR, 1.3, 0, 0),
+                     (.shoulderL, -0.6, 0, 0.7), (.shoulderR, -0.6, 0, -0.7)]), body: SIMD3(0, -0.2, 0), rot: .zero, ease: .snap),
+    ], blendOut: 0.16)
+
+    /// Slammed: driven face-first into the ground, bounce, land, get up (~1 s).
+    static let slam = Clip(name: "slam", keys: [
+        Key(0.05, H([(.spine, 0.9, 0, 0), (.head, 0.5, 0, 0), (.shoulderL, 0.4, 0, 1.0), (.shoulderR, 0.4, 0, -1.0), (.kneeL, 0.6, 0, 0), (.kneeR, 0.6, 0, 0)]),
+            body: SIMD3(0, -0.1, -0.05), rot: SIMD3(0.7, 0, 0), ease: .snap),
+        Key(0.14, H([(.spine, 0.3, 0, 0)]), body: SIMD3(0, -0.2, -0.1), rot: SIMD3(1.45, 0, 0), ease: .inQuad),
+        Key(0.38, H([(.spine, -0.5, 0, 0), (.head, -0.5, 0, 0), (.shoulderL, 0.6, 0, 1.3), (.shoulderR, 0.6, 0, -1.3), (.hipL, -0.3, 0, 0.2), (.hipR, -0.3, 0, -0.2)]),
+            body: SIMD3(0, 0.55, -0.35), rot: SIMD3(2.8, 0, 0), ease: .out),
+        Key(0.56, H([(.spine, -0.2, 0, 0), (.head, -0.2, 0, 0)]), body: SIMD3(0, -0.15, -0.5), rot: SIMD3(4.75, 0, 0), ease: .inQuad),
+        Key(0.74, [:], body: SIMD3(0, -0.15, -0.5), rot: SIMD3(4.75, 0, 0)),
+        Key(0.9, H([(.spine, 0.45, 0, 0), (.hipL, -1.0, 0, 0.2), (.hipR, -0.6, 0, -0.2), (.kneeL, 1.5, 0, 0), (.kneeR, 1.3, 0, 0),
+                    (.shoulderL, -0.6, 0, 0.7), (.shoulderR, -0.6, 0, -0.7)]), body: SIMD3(0, -0.2, -0.4), rot: SIMD3(2 * .pi, 0, 0), ease: .inOut),
+    ], blendOut: 0.18)
+}

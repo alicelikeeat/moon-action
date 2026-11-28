@@ -541,6 +541,7 @@ final class FighterModel {
     func play(_ clip: Clip, speed: Double = 1) { animator.play(clip, speed: speed) }
     /// Advance only this fighter's animation (tests / offscreen renders).
     func animatorTick(_ dt: Double) { animator.tick(dt * animRate) }
+    var animatorClipName: String? { animator.playing }
 
     func apply(_ pose: Pose, duration: Double) {
         if duration <= 0 { animator.set(pose) } else { animator.play(Moves.hold(pose, duration)) }
@@ -605,6 +606,24 @@ final class FighterModel {
     func charge() { animator.play(Moves.charge) }
 
     private var hitSide = 0
+    /// Move-specific hit reaction. Heavy (launching) hits always use a knockdown or a launch.
+    func react(_ r: HitReact, heavy: Bool) {
+        hitSide += 1
+        let side: Float = hitSide % 2 == 0 ? 1 : -1
+        let clip: Clip
+        switch (r, heavy) {
+        case (.slam, true): clip = Moves.slam
+        case (.trip, _): clip = Moves.trip
+        case (_, true): clip = Moves.launched
+        case (.gut, _): clip = Moves.hitGut
+        case (.spin, _), (.slam, _), (.launch, _): clip = Moves.hitSpin(side)
+        case (.blast, _): clip = Moves.hitBlast
+        case (.head, _): clip = Moves.hitHead
+        }
+        animator.play(clip)
+        flash()
+    }
+
     func hurt(heavy: Bool) {
         if heavy {
             animator.play(Moves.launched)

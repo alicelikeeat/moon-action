@@ -30,6 +30,9 @@ final class BattleScreen: Screen {
     var camKick = SIMD3<Float>(repeating: 0)
     /// Jump the follow camera to its new spot next frame (after a teleport) instead of sweeping through fighters.
     var snapCamera = false
+    /// Smoothed weights of the combo camera modes (0…1).
+    var comboCamW: Float = 0
+    var guardCamW: Float = 0
     var hud: BattleHUD!
     var startZone: RangeZone = .mid
     var fxRoot = SCNNode()
@@ -319,6 +322,28 @@ final class BattleScreen: Screen {
             let back: Float = 4.4 + max(0, (3 - d)) * 0.35
             targetPos = p.world3 - f * back + right * 0.75 + SIMD3(0, 2.45, 0)
             targetLook = p.world3 + f * max(3.2, d * 0.7) + SIMD3(0, 1.15, 0)
+
+            // Combo camera: swing to a closer 3/4 view while the player is comboing; pull back and up
+            // while the player is being comboed; follow a launched fighter into the air.
+            let comboing = player.comboCount >= 2 && now - player.lastHitTime < 0.8 && !e.isKO
+            let comboed = enemy.comboCount >= 2 && now - enemy.lastHitTime < 0.8 && !p.isKO
+            comboCamW += ((comboing ? 1 : 0) - comboCamW) * min(1, dt * 5)
+            guardCamW += ((comboed ? 1 : 0) - guardCamW) * min(1, dt * 5)
+            let mid = (p.world3 + e.world3) / 2
+            let comboPos = p.world3 - f * 2.8 + right * 2.5 + SIMD3(0, 1.7, 0)
+            let comboLook = mid + f * 0.4 + SIMD3(0, 1.25, 0)
+            let guardPos = p.world3 - f * 6.0 + right * 1.1 + SIMD3(0, 3.3, 0)
+            let guardLook = mid + SIMD3(0, 1.0, 0)
+            targetPos = simd_mix(targetPos, comboPos, SIMD3(repeating: comboCamW))
+            targetLook = simd_mix(targetLook, comboLook, SIMD3(repeating: comboCamW))
+            targetPos = simd_mix(targetPos, guardPos, SIMD3(repeating: guardCamW * (1 - comboCamW)))
+            targetLook = simd_mix(targetLook, guardLook, SIMD3(repeating: guardCamW * (1 - comboCamW)))
+            for c in [e, p] where now < c.launchedUntil + 0.25 {
+                let airY = c.model.body.simdWorldPosition.y - FighterModel.hover
+                targetLook.y += max(0, airY) * 0.8
+                targetPos.y += max(0, airY) * 0.35
+            }
+            if comboing || comboed { k = 1 - exp(-dt * 8) }
         }
         camPos += (targetPos - camPos) * k
         camLook += (targetLook - camLook) * k
@@ -515,5 +540,19 @@ extension BattleScreen {
                 c.model.animRate = paused || frozen ? 0 : timeScale
             }
         }
+    }
+}
+
+extension BattleScreen {
+    /// Hard cut to a low side close-up of a finishing blow (fighting-game impact shot).
+    func finisherCut(_ a: Combatant, _ t: Combatant) {
+        guard !cinematic else { return }
+        let f2 = dirTo(a, t)
+        let f = SIMD3(f2.x, 0, f2.y)
+        let side: Float = a === player.current ? 1 : -1
+        let right = SIMD3(-f2.y, 0, f2.x) * side
+        let mid = (a.world3 + t.world3) / 2
+        let pos = mid + right * 3.4 - f * 0.5 + SIMD3(0, 1.45, 0)
+        cut(to: pos, look: t.chest + SIMD3(0, 0.1, 0) - f * 0.2, for: 0.55, snap: true)
     }
 }

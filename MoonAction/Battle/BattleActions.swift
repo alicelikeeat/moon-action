@@ -318,7 +318,10 @@ extension BattleScreen {
                     let heavy = last && style != .basic
                     self.applyHit(from: s, power: per * (last ? 1.4 : 1), stun: last ? 0.7 : 0.4,
                                   knock: heavy ? (style == .normal ? 9 : 13) : 1.5, heavy: heavy, aiDodge: aiChance,
-                                  basic: style == .basic, sfx: heavy ? sig.heavyImpact : sig.impact, pitch: sig.pitch)
+                                  basic: style == .basic, sfx: heavy ? sig.heavyImpact : sig.impact, pitch: sig.pitch,
+                                  react: HitReact.of(clip))
+                    // Finisher: hard cut to a side close-up of the impact.
+                    if heavy && hits > 2 { self.finisherCut(a, target) }
                     // Follow-up glide keeps combos connected.
                     if !last {
                         let dir = self.dirTo(a, target)
@@ -438,7 +441,7 @@ extension BattleScreen {
                     } else {
                         p.alive = false
                         applyHit(from: p.owner, power: p.power, stun: 0.45, knock: 2.5, heavy: false, aiDodge: 0,
-                                 source: SIMD2(p.pos.x - p.vel.x, p.pos.z - p.vel.z))
+                                 source: SIMD2(p.pos.x - p.vel.x, p.pos.z - p.vel.z), react: .blast)
                         VFX.impact(at: p.pos, color: p.owner.current.def.aura, heavy: p.radius >= 0.3, in: fxRoot,
                                    dir: simd_normalize(p.vel), scale: camScale(p.pos))
                     }
@@ -796,7 +799,7 @@ extension BattleScreen {
     @discardableResult
     func applyHit(from s: Side, power: Double, stun: Double, knock: Float, heavy: Bool, aiDodge: Double,
                   ignoreInvuln: Bool = false, basic: Bool = false, source: SIMD2<Float>? = nil,
-                  sfx: SFX? = nil, pitch: Float = 1) -> Bool {
+                  sfx: SFX? = nil, pitch: Float = 1, react: HitReact? = nil) -> Bool {
         let o = opponent(of: s)
         let t = o.current
         let a = s.current
@@ -827,7 +830,7 @@ extension BattleScreen {
         t.hp = max(0, t.hp - dmg)
         timeline.cancel(tag: t)
         t.busy = false
-        t.stunUntil = now + stun
+        t.stunUntil = now + max(stun, heavy ? (react?.minStun ?? 0) : (react == .trip ? HitReact.trip.minStun : 0))
         let src = source ?? a.pos
         var away = t.pos - src
         away = simd_length(away) > 0.001 ? simd_normalize(away) : SIMD2(0, 1)
@@ -839,7 +842,7 @@ extension BattleScreen {
             s.relay = Relay(target: t, launcher: a, until: t.launchedUntil)
             VFX.dust(at: t.world3 + SIMD3(0, 0.1, 0), scale: 1.0, in: fxRoot)
         }
-        t.model.hurt(heavy: heavy)
+        if let react { t.model.react(react, heavy: heavy) } else { t.model.hurt(heavy: heavy) }
         if !basic { s.cardLanded = true }
         if basic { s.energy = min(Tune.energyMax, s.energy + 2) }
 
