@@ -190,6 +190,11 @@ final class CoreBattleScreen: Screen {
         hud.sync(engine)
     }
 
+    /// Tests / demos: let the AI play the player's side.
+    func setAuto(_ on: Bool) { hud.auto = on }
+    var isFinished: Bool { finished }
+    var engineState: BattleEngine { engine }
+
     private func setRates(_ r: Double) {
         for side in models { for m in side { m.animRate = r } }
     }

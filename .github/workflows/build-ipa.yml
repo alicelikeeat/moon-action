@@ -184,6 +184,28 @@ jobs:
           run core;     sleep 5;  shot 19-core-a; sleep 3; shot 20-core-b; sleep 3; shot 21-core-c; sleep 4; shot 22-core-d
           ls -la shots
 
+      - name: Crash reports
+        if: always()
+        run: |
+          D=~/Library/Logs/DiagnosticReports
+          ls -t $D 2>/dev/null | grep -i moonaction | head -5 || echo "no MoonAction crash reports"
+          for f in $(ls -t $D 2>/dev/null | grep -i moonaction | head -2); do
+            echo "===== $f"
+            python3 - "$D/$f" <<'PY' || head -c 8000 "$D/$f"
+          import json, sys
+          raw = open(sys.argv[1]).read()
+          parts = raw.split("\n", 1)
+          j = json.loads(parts[1] if len(parts) > 1 and parts[0].strip().startswith("{") else raw)
+          ex = j.get("exception", {}); print("exception:", ex, j.get("termination", {}).get("indicator"))
+          print("asi:", j.get("asi"))
+          trig = next((t for t in j.get("threads", []) if t.get("triggered")), None)
+          imgs = j.get("usedImages", [])
+          for fr in (trig or {}).get("frames", [])[:25]:
+              img = imgs[fr.get("imageIndex", 0)].get("name", "?") if imgs else "?"
+              print(f"  {img:28} {fr.get('symbol', '?')}  +{fr.get('symbolLocation', 0)}  {fr.get('sourceFile', '')}:{fr.get('sourceLine', '')}")
+          PY
+          done
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
