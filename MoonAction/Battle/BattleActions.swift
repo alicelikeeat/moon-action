@@ -768,6 +768,8 @@ extension BattleScreen {
         }
         var dmg = power * a.atk * (1200 / (1000 + t.dfn * (now < t.cursedUntil ? 0.7 : 1))) * 1.25
         dmg *= damageVariance()
+        let affinity = Element.multiplier(a.def.element, t.def.element)
+        dmg *= affinity
         if now < a.powerUntil { dmg *= 1.3 }
         if now < t.barrierUntil { dmg *= 0.4 }
         dmg *= 1 + min(0.3, Double(max(0, s.comboCount - 4)) * 0.02)
@@ -800,7 +802,11 @@ extension BattleScreen {
         let hitDir = simd_normalize(SIMD3(away.x, 0.15, away.y))
         spark(at: hitPoint, color: a.def.aura, big: heavy || crit, dir: hitDir)
         popup(crit ? "\(Int(dmg))!" : "\(Int(dmg))", at: hitPoint + SIMD3(Float.random(in: -0.3...0.3), 0.5, 0),
-              color: crit ? Theme.accent : .white, size: crit ? 26 : (heavy ? 21 : 16))
+              color: crit ? Theme.accent : (affinity > 1 ? UIColor(hex: 0xFF9A4A) : (affinity < 1 ? Theme.text2 : .white)),
+              size: crit ? 26 : (heavy ? 21 : 16))
+        if affinity > 1 && heavy {
+            popup(L("battle.advantage"), at: hitPoint + SIMD3(0, 1.0, 0), color: UIColor(hex: 0xFF9A4A), size: 15)
+        }
         // Hit stop scaled by hit weight (light jab → heavy launcher → critical), like arcade fighters.
         let stop: Double = (heavy ? 0.11 : (basic ? 0.045 : 0.065)) + (crit ? 0.035 : 0)
         beginHitStop(stop, attacker: ranged && dist(a, t) > 3 ? nil : a, victim: t, shake: heavy ? 0.07 : 0.035)
@@ -922,5 +928,63 @@ extension BattleScreen {
 extension Combatant {
     func charging(_ on: Bool) {
         wasCharging = on
+    }
+}
+
+// MARK: - Main ability
+
+extension BattleScreen {
+    func abilityReady(_ s: Side) -> Bool {
+        let c = s.current
+        return !c.abilityUsed && now >= MainAbility.chargeTime && canAct(s)
+    }
+
+    /// Charge progress 0…1 for the HUD.
+    var abilityCharge: Double { min(1, now / MainAbility.chargeTime) }
+
+    @discardableResult
+    func useAbility(_ s: Side) -> Bool {
+        guard abilityReady(s) else { return false }
+        let a = s.current
+        let o = opponent(of: s)
+        let ab = a.def.ability
+        a.abilityUsed = true
+        a.busy = true
+        s.charging = false
+        timeline.cancel(tag: a)
+        a.model.apply(FighterModel.chargePose, duration: 0.12)
+        a.model.setAura(3)
+        a.auraBurstUntil = now + 1.2
+        hud.moveBanner(ab.name, kind: .effect, side: s, symbol: ab.symbol)
+        Sound.play(.charge)
+        if s.isPlayer { Haptics.rigid.impactOccurred() }
+        VFX.vanish(at: a.world3, height: 2.2, color: a.def.aura, in: fxRoot)
+        switch ab {
+        case .recover:
+            let amount = a.maxHP * 0.3
+            a.hp = min(a.maxHP, a.hp + amount)
+            a.cursedUntil = 0
+            popup("+\(Int(amount))", at: a.chest + SIMD3(0, 0.6, 0), color: Theme.effect, size: 26)
+        case .guardian:
+            a.barrierUntil = now + 8
+            s.dodge = Tune.dodgeMax
+        case .overdrive:
+            a.powerUntil = now + 12
+            s.energy = min(Tune.energyMax, s.energy + 40)
+            popup(L("battle.atkup"), at: a.chest + SIMD3(0, 0.7, 0), color: UIColor(hex: 0xFF8A5E), size: 22)
+        case .surge:
+            s.energy = Tune.energyMax
+            s.dodge = min(Tune.dodgeMax, s.dodge + 50)
+            popup(L("ability.surge"), at: a.chest + SIMD3(0, 0.7, 0), color: Theme.energy, size: 22)
+        case .hex:
+            o.current.cursedUntil = now + 12
+            o.energy = max(0, o.energy - 40)
+            popup(L("ability.hex"), at: o.current.chest + SIMD3(0, 0.7, 0), color: Theme.ultimate, size: 22)
+        }
+        timeline.after(0.5, tag: a) {
+            a.busy = false
+            a.model.stance()
+        }
+        return true
     }
 }

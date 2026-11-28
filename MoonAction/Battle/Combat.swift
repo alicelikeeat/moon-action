@@ -54,6 +54,7 @@ final class Combatant {
     var perfectUsed = true
     var launchedUntil = 0.0
     var auraBurstUntil = 0.0
+    var abilityUsed = false
 
     var isKO: Bool { hp <= 0 }
     var hpFraction: CGFloat { CGFloat(max(0, hp) / maxHP) }

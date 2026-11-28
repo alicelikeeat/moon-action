@@ -47,6 +47,11 @@ final class BattleHUD {
     private var lastNext = ""
     private var lastActive = -1
     private var lastEActive = -1
+    private let pElem = UIImageView()
+    private let eElem = UIImageView()
+    private var abilityBtn: UIButton!
+    private let abilityRing = RingView(color: Theme.accent)
+    private var abilityState = -1
 
     init(screen: BattleScreen) {
         self.screen = screen
@@ -81,7 +86,11 @@ final class BattleHUD {
 
         let ePanel = Glass.panel(radius: 20)
         circleImage(ePortrait, size: 34)
-        let eNameRow = UIStackView(arrangedSubviews: [eName, eLevel, UIView(), eHPText])
+        for iv in [pElem, eElem] {
+            iv.contentMode = .center
+            Glass.size(iv, 14, 14)
+        }
+        let eNameRow = UIStackView(arrangedSubviews: [eName, eElem, eLevel, UIView(), eHPText])
         eNameRow.spacing = 6
         eNameRow.alignment = .firstBaseline
         let eBars = UIStackView(arrangedSubviews: [eNameRow, eHP, eSoul])
@@ -151,7 +160,7 @@ final class BattleHUD {
             pipRow.addArrangedSubview(pip)
             pips.append(pip)
         }
-        let pNameRow = UIStackView(arrangedSubviews: [pName, pSpeed, UIView(), pipRow, pHPText])
+        let pNameRow = UIStackView(arrangedSubviews: [pName, pElem, pSpeed, UIView(), pipRow, pHPText])
         pNameRow.spacing = 6
         pNameRow.alignment = .center
         let pBars = UIStackView(arrangedSubviews: [pNameRow, pHP, pSoul])
@@ -199,6 +208,28 @@ final class BattleHUD {
         root.addSubview(nextCard)
         let nextLabel = Glass.caption(L("battle.next"), size: 8)
         root.addSubview(nextLabel)
+
+        // Main ability: charges during the battle, one use per fighter.
+        abilityBtn = Glass.button(symbol: "sparkles", style: .secondary, fontSize: 15) { [weak self] in self?.tapAbility() }
+        root.addSubview(abilityBtn)
+        abilityRing.lineWidth = 2.5
+        abilityRing.isUserInteractionEnabled = false
+        abilityRing.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(abilityRing)
+        let abilityLabel = Glass.caption(L("battle.ability"), size: 8)
+        root.addSubview(abilityLabel)
+        NSLayoutConstraint.activate([
+            abilityBtn.centerXAnchor.constraint(equalTo: energyPanel.centerXAnchor),
+            abilityBtn.bottomAnchor.constraint(equalTo: nextLabel.topAnchor, constant: -18),
+            abilityBtn.widthAnchor.constraint(equalToConstant: 44),
+            abilityBtn.heightAnchor.constraint(equalToConstant: 44),
+            abilityRing.centerXAnchor.constraint(equalTo: abilityBtn.centerXAnchor),
+            abilityRing.centerYAnchor.constraint(equalTo: abilityBtn.centerYAnchor),
+            abilityRing.widthAnchor.constraint(equalToConstant: 50),
+            abilityRing.heightAnchor.constraint(equalToConstant: 50),
+            abilityLabel.centerXAnchor.constraint(equalTo: abilityBtn.centerXAnchor),
+            abilityLabel.topAnchor.constraint(equalTo: abilityBtn.bottomAnchor, constant: 4),
+        ])
 
         let hand = UIStackView()
         hand.spacing = 6
@@ -366,6 +397,10 @@ final class BattleHUD {
         pPortrait.image = Portraits.image(c.def, .bust, size: CGSize(width: 64, height: 64))
         pPortrait.backgroundColor = c.def.aura.withAlphaComponent(0.3)
         pSpeed.image = UIImage(systemName: c.def.speed.icon, withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
+        setElement(pElem, c.def.element)
+        abilityBtn.configuration?.image = UIImage(systemName: c.def.ability.symbol,
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold))
+        abilityState = -1
     }
 
     private func enemyChanged() {
@@ -373,11 +408,44 @@ final class BattleHUD {
         let c = s.enemy.current
         ePortrait.image = Portraits.image(c.def, .bust, size: CGSize(width: 64, height: 64))
         ePortrait.backgroundColor = c.def.aura.withAlphaComponent(0.3)
+        setElement(eElem, c.def.element)
+    }
+
+    private func setElement(_ iv: UIImageView, _ e: Element) {
+        iv.image = UIImage(systemName: e.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .bold))
+        iv.tintColor = e.color
+        iv.accessibilityLabel = e.name
+    }
+
+    private func tapAbility() {
+        guard let s = screen else { return }
+        if !s.useAbility(s.player) {
+            let c = s.player.current
+            let state = c.abilityUsed ? L("battle.abilityUsed") : L("battle.abilityCharging")
+            banner(c.def.ability.name + " · " + state, color: Theme.text2, big: false, duration: 1.0)
+        }
+    }
+
+    private func updateAbility() {
+        guard let s = screen else { return }
+        let c = s.player.current
+        abilityRing.set(CGFloat(c.abilityUsed ? 0 : s.abilityCharge))
+        let state = c.abilityUsed ? 2 : (s.now >= MainAbility.chargeTime ? 1 : 0)
+        guard state != abilityState else { return }
+        abilityState = state
+        abilityBtn.alpha = state == 2 ? 0.3 : (state == 1 ? 1 : 0.65)
+        abilityBtn.tintColor = state == 1 ? Theme.accent : Theme.smoke
+        abilityBtn.configuration?.baseForegroundColor = state == 1 ? Theme.ink : .white
+        if state == 1 {
+            abilityBtn.transform = CGAffineTransform(scaleX: 1.25, y: 1.25)
+            UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 0) { self.abilityBtn.transform = .identity }
+        }
     }
 
     // MARK: Update
 
     func update(dt: Double) {
+        updateAbility()
         guard let s = screen, let p = s.player, let e = s.enemy else { return }
         let pc = p.current
         let ec = e.current

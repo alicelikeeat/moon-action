@@ -31,6 +31,13 @@ extension BattleScreen {
             return
         }
 
+        // Main ability: when hurt, or now and then once charged.
+        if abilityReady(s) && (c.hp < c.maxHP * 0.55 || roll(0.03)) {
+            useAbility(s)
+            aiNext[id] = now + 0.6
+            return
+        }
+
         let affordable: [Int] = (0..<4).filter { i in
             guard let card = s.hand[i] else { return false }
             return s.energy >= Double(card.cost)
