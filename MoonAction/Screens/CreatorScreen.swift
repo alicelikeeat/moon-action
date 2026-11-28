@@ -22,7 +22,6 @@ final class CreatorScreen: Screen {
 
     private let content = UIStackView()
     private var tabControl: UISegmentedControl!
-    private var demoMoveAt = 1.2
 
     init(spec: CharacterSpec? = nil) {
         let existing = CustomFighter.spec
@@ -48,7 +47,8 @@ final class CreatorScreen: Screen {
             self.spec.name = "Demo"
             tab = 1
             tabControl.selectedSegmentIndex = 1
-            tZoom = 0.75
+            tZoom = 0.85
+            tYaw = 0.3
             showTab()
         }
         rebuild()
@@ -73,10 +73,6 @@ final class CreatorScreen: Screen {
     override func update(dt: Double) {
         clock += dt
         if dirty && clock - lastBuild > 0.08 { rebuild() }
-        if Demo.mode == "creator", clock > demoMoveAt {
-            demoMoveAt = clock + 2.5
-            tYaw += 0.6
-        }
         applyCamera(snap: false, dt: Float(dt))
     }
 
@@ -84,11 +80,14 @@ final class CreatorScreen: Screen {
         let k: Float = snap ? 1 : min(1, dt * 10)
         yaw += (tYaw - yaw) * k
         zoom += (tZoom - zoom) * k
-        let h = 2.15 * spec.height
-        let lookY = h * (0.5 + 0.4 * zoom) - 0.55 * (1 - zoom)
-        let dist: Float = 4.6 - 3.7 * zoom
-        let target = SIMD3<Float>(0, lookY, 0)
-        arena.camera.simdPosition = target + SIMD3(sin(yaw) * dist, 0.25 * (1 - zoom), cos(yaw) * dist)
+        // Focus point: body center (zoom 0) up to the face (zoom 1). The aim is pushed below the focus so
+        // the focus lands in the open area above the editing panel (upper ~58% of the screen).
+        let h = 2.21 * spec.height
+        let focus = h * (0.5 + 0.42 * zoom)
+        let dist: Float = 4.3 - 3.45 * zoom
+        let halfH = dist * tan(29 * Float.pi / 180)
+        let target = SIMD3<Float>(0, focus - halfH * 0.42, 0)
+        arena.camera.simdPosition = target + SIMD3(sin(yaw) * dist, 0.15 * (1 - zoom), cos(yaw) * dist)
         arena.camera.simdLook(at: target, up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
     }
 
