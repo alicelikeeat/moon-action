@@ -326,3 +326,41 @@ extension Moves {
         Key(0.24, Q([(.spine, 0.1, 0, 0)]), body: SIMD3(0, -0.02, -0.06)),
     ], impact: 0.14, blendOut: 0.18)
 }
+
+// MARK: - Switching (cover change / tag-in)
+
+extension Moves {
+    private static func R(_ e: [(Joint, Float, Float, Float)]) -> Pose {
+        var p: Pose = [:]
+        for (j, x, y, z) in e { p[j] = SIMD3(x, y, z) }
+        return p
+    }
+
+    /// Cover: arms crossed in front of the face, braced low.
+    static let coverGuard = Clip(name: "coverGuard", keys: [
+        Key(0.06, R([(.spine, 0.2, 0, 0), (.head, 0.15, 0, 0), (.shoulderL, -1.75, 0, -0.3), (.elbowL, -2.15, 0, 0),
+                     (.shoulderR, -1.75, 0, 0.3), (.elbowR, -2.15, 0, 0), (.hipL, -0.8, 0, 0.15), (.kneeL, 1.2, 0, 0),
+                     (.hipR, 0.1, 0, -0.15), (.kneeR, 0.9, 0, 0)]), body: SIMD3(0, -0.12, 0.08), ease: .snap),
+        Key(0.24, R([(.spine, 0.25, 0, 0)]), body: SIMD3(0, -0.14, 0.02)),
+    ], blendOut: 0.1)
+
+    /// Leaving a combo: backflip out.
+    static let backflip = Clip(name: "backflip", keys: [
+        Key(0.07, R([(.spine, 0.3, 0, 0), (.kneeL, 1.3, 0, 0), (.kneeR, 1.3, 0, 0), (.hipL, -0.8, 0, 0.1), (.hipR, -0.8, 0, -0.1)]),
+            body: SIMD3(0, -0.14, 0)),
+        Key(0.25, R([(.spine, 0.5, 0, 0), (.hipL, -1.6, 0, 0.1), (.hipR, -1.6, 0, -0.1), (.kneeL, 2.0, 0, 0), (.kneeR, 2.0, 0, 0),
+                     (.shoulderL, -1.2, 0, 0.3), (.shoulderR, -1.2, 0, -0.3)]), body: SIMD3(0, 0.7, -0.2), rot: SIMD3(-.pi, 0, 0), ease: .linear),
+        Key(0.42, R([(.spine, 0.3, 0, 0), (.kneeL, 1.1, 0, 0), (.kneeR, 1.1, 0, 0), (.hipL, -0.7, 0, 0.1), (.hipR, -0.7, 0, -0.1)]),
+            body: SIMD3(0, -0.1, -0.3), rot: SIMD3(-2 * .pi, 0, 0), ease: .out),
+    ], hold: true)
+
+    /// Tag-in: drop from above and land in a crouch.
+    static let tagDrop = Clip(name: "tagDrop", keys: [
+        Key(0.001, R([(.spine, 0.3, 0, 0), (.hipL, -1.2, 0, 0.1), (.hipR, -0.6, 0, -0.1), (.kneeL, 1.6, 0, 0), (.kneeR, 1.2, 0, 0),
+                      (.shoulderL, -0.4, 0, 0.9), (.shoulderR, -0.4, 0, -0.9)]), body: SIMD3(0, 1.8, -0.2), ease: .linear),
+        Key(0.18, R([(.spine, 0.55, 0, 0), (.head, -0.3, 0, 0), (.hipL, -1.3, 0, 0.2), (.hipR, -0.5, 0, -0.2), (.kneeL, 1.8, 0, 0),
+                     (.kneeR, 1.6, 0, 0), (.shoulderL, 0.3, 0, 0.6), (.shoulderR, 0.5, 0, -0.5), (.elbowR, -0.3, 0, 0)]),
+            body: SIMD3(0, -0.32, 0), ease: .inQuad),
+        Key(0.34, R([(.spine, 0.5, 0, 0)]), body: SIMD3(0, -0.3, 0)),
+    ], blendOut: 0.22)
+}

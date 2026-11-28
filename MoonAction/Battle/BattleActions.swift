@@ -933,8 +933,22 @@ extension BattleScreen {
             popup(L("battle.breakout"), at: old.chest + SIMD3(0, 0.9, 0), color: Theme.energy, size: 20)
         }
         timeline.cancel(tag: old)
-        old.model.root.removeFromParentNode()
         old.charging(false)
+        let opp = opponent(of: s).current
+        if old.isKO {
+            old.model.root.removeFromParentNode()
+        } else {
+            // Outgoing fighter: backflip out of a combo, or step back, then fade away.
+            old.model.play(escaping ? Moves.backflip : Moves.stepBack)
+            let back2 = -dirTo(old, opp) * (escaping ? 2.6 : 1.8)
+            let root = old.model.root
+            root.runAction(.sequence([
+                .group([.move(by: SCNVector3(back2.x, 0, back2.y), duration: escaping ? 0.42 : 0.3),
+                        .sequence([.wait(duration: 0.14), .fadeOut(duration: 0.24)])]),
+                .removeFromParentNode(),
+                .run { $0.opacity = 1 },
+            ]), forKey: "tagOut")
+        }
         s.active = index
         s.swapReadyAt = now + Tune.swapCooldown
         s.chain = 0
@@ -944,10 +958,22 @@ extension BattleScreen {
         n.invulnUntil = now + 0.6
         n.model.revive()
         place(n, at: pos)
+        n.model.root.removeAction(forKey: "tagOut")
+        n.model.root.opacity = 1
         n.auraBurstUntil = now + 0.6
         SCNNode.emit(Toon.burst(n.def.aura, count: 70, speed: 5, size: 0.3, life: 0.5), at: n.chest, in: fxRoot)
         fillHand(s)
         updateFacing()
+        if escaping {
+            coverChange(s, entrant: n, attacker: opp)
+        } else {
+            n.model.play(Moves.tagDrop)
+            timeline.after(0.18) { [weak self] in
+                guard let self else { return }
+                VFX.dust(at: n.world3 + SIMD3(0, 0.1, 0), scale: 0.8, in: self.fxRoot)
+                Sound.play(.thud, pitch: 1.1)
+            }
+        }
         hud.moveBanner(banner, kind: .strike, side: s)
         Sound.play(.charge)
         if s.isPlayer { hud.teamChanged() }
@@ -1043,5 +1069,42 @@ extension BattleScreen {
             a.model.stance()
         }
         return true
+    }
+}
+
+// MARK: - Cover change
+
+extension BattleScreen {
+    /// Switching out of a combo: the teammate cuts in, blocks with crossed arms, then palm-strikes
+    /// the attacker away (no damage, short stagger), opening room to fight back.
+    func coverChange(_ s: Side, entrant n: Combatant, attacker o: Combatant) {
+        n.busy = true
+        n.model.play(Moves.coverGuard)
+        n.model.afterimage(in: fxRoot)
+        Sound.play(.slap, pitch: 0.8)
+        VFX.impact(at: n.chest + SIMD3(0, 0.2, 0), color: .white, heavy: false, in: fxRoot, scale: camScale(n.chest))
+        if s.isPlayer { Haptics.rigid.impactOccurred() }
+        let push = Moves.doublePalm
+        let speed = 1.35
+        timeline.sequence(tag: n, [
+            (0.22, { n.model.play(push, speed: speed) }),
+            (push.impact / speed, { [weak self] in
+                guard let self, !o.isKO else { return }
+                let dir = self.dirTo(n, o)
+                o.tween = nil
+                o.knockVel = dir * 9
+                o.stunUntil = max(o.stunUntil, self.now + 0.45)
+                o.busy = false
+                self.timeline.cancel(tag: o)
+                o.model.hurt(heavy: false)
+                let p = o.chest + SIMD3(0, 0.1, 0)
+                VFX.impact(at: p, color: n.def.aura, heavy: true, in: self.fxRoot, dir: SIMD3(dir.x, 0.1, dir.y), scale: self.camScale(p))
+                self.beginHitStop(0.08, attacker: n, victim: o, shake: 0.05)
+                self.kickCamera(from: n.world3, to: o.world3, strength: 0.25)
+                Sound.play(.heavy, pitch: 0.9)
+                if s.isPlayer || o === self.player.current { Haptics.hit(true) }
+            }),
+            (0.18, { n.busy = false }),
+        ])
     }
 }
