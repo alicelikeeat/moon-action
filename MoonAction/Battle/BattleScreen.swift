@@ -72,6 +72,12 @@ final class BattleScreen: Screen {
         arena = Arena(theme: stage - 1)
         scene = arena.scene
         pointOfView = arena.camera
+        // Battle camera: tighter, weaker bloom so additive hit/teleport FX stay crisp instead of white halos.
+        if let cam = arena.camera.camera {
+            cam.bloomIntensity = 0.45
+            cam.bloomThreshold = 1.0
+            cam.bloomBlurRadius = 7
+        }
         arena.world.addChildNode(fxRoot)
 
         let pt = playerIDs.map { Combatant(def: Roster.byID($0), level: Save.shared.level($0)) }
