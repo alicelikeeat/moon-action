@@ -495,7 +495,7 @@ final class Save {
             data = SaveData()
         }
         // Fighters that ship with an imported 3D model are always available.
-        for id in ["aria"] where !data.unlocked.contains(id) {
+        for id in ["aria", "luna"] where !data.unlocked.contains(id) {
             data.unlocked.append(id)
         }
     }

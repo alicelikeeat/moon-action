@@ -98,7 +98,7 @@ enum Demo {
         switch mode {
         case "team": return TeamScreen()
         case "summon": return SummonScreen()
-        case "viewer": return ViewerScreen(focus: "aria")
+        case "viewer": return ViewerScreen(focus: "luna")
         case "creator": return CreatorScreen()
         case "cheats": return HomeScreen()
         case "battle", "ultimate", "special":
