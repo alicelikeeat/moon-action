@@ -43,6 +43,9 @@ final class CoreBattleScreen: Screen {
     private var liveTouches: [Int: UITouch] = [:]
     private var warnUntil: Double = 0
     private let warnLabel = UILabel()
+    private let comboLabel = UILabel()
+    private var shownCombo = 0
+    private let callouts = UIStackView()
     private var resignObserver: NSObjectProtocol?
 
     init(player: [String] = ["sera", "kai", "lan"], enemy: [String] = ["nova", "zero", "aegis"],
@@ -60,7 +63,7 @@ final class CoreBattleScreen: Screen {
     // MARK: - Build
 
     override func build() {
-        arena = Arena(theme: 1)
+        arena = Arena(theme: 0)
         scene = arena.scene
         pointOfView = arena.camera
         if let cam = arena.camera.camera {
@@ -93,6 +96,24 @@ final class CoreBattleScreen: Screen {
         hud.sync(engine)
         addHUD(CoreTopHUD(m: hud), top: true)
         addHUD(CoreBottomHUD(m: hud), top: false)
+
+        comboLabel.textAlignment = .right
+        comboLabel.alpha = 0
+        comboLabel.isUserInteractionEnabled = false
+        comboLabel.translatesAutoresizingMaskIntoConstraints = false
+        ui.addSubview(comboLabel)
+        callouts.axis = .vertical
+        callouts.spacing = 4
+        callouts.alignment = .leading
+        callouts.isUserInteractionEnabled = false
+        callouts.translatesAutoresizingMaskIntoConstraints = false
+        ui.addSubview(callouts)
+        NSLayoutConstraint.activate([
+            comboLabel.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -14),
+            comboLabel.centerYAnchor.constraint(equalTo: safe.centerYAnchor, constant: -70),
+            callouts.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 12),
+            callouts.topAnchor.constraint(equalTo: safe.topAnchor, constant: 132),
+        ])
 
         warnLabel.text = "!"
         warnLabel.font = .systemFont(ofSize: 40, weight: .black)
@@ -187,7 +208,72 @@ final class CoreBattleScreen: Screen {
         placeModels(dt: Float(dt))
         updateCamera(dt: Float(dt))
         updateWarning()
+        updateCombo()
         hud.sync(engine)
+    }
+
+    /// Big right-edge combo counter (DBL style): pops on every hit, fades when the combo ends.
+    private func updateCombo() {
+        let mine = engine.sides[0].comboHits, theirs = engine.sides[1].comboHits
+        let n = max(mine, theirs)
+        guard n != shownCombo else { return }
+        let grew = n > shownCombo
+        shownCombo = n
+        if n < 2 {
+            UIView.animate(withDuration: 0.35, delay: 0.25) { self.comboLabel.alpha = 0 }
+            return
+        }
+        let color = mine >= theirs ? Theme.accent : Theme.hpEnemy
+        let t = NSMutableAttributedString(string: "\(n)", attributes: [
+            .font: UIFont.italic(46, .black), .foregroundColor: color,
+            .strokeColor: UIColor.black, .strokeWidth: -3,
+        ])
+        t.append(NSAttributedString(string: " " + (L10n.isZH ? "连击" : "Combo"), attributes: [
+            .font: UIFont.italic(15, .heavy), .foregroundColor: UIColor.white,
+            .strokeColor: UIColor.black, .strokeWidth: -3,
+        ]))
+        comboLabel.attributedText = t
+        comboLabel.alpha = 1
+        if grew {
+            comboLabel.transform = CGAffineTransform(scaleX: 1.35, y: 1.35)
+            UIView.animate(withDuration: 0.16) { self.comboLabel.transform = .identity }
+        }
+    }
+
+    /// Stacked status callouts on the upper left (Ki recovery, BLOCK, cover change, …).
+    private func callout(_ text: String, color: UIColor, symbol: String? = nil) {
+        let l = UILabel()
+        let t = NSMutableAttributedString()
+        if let symbol, let img = UIImage(systemName: symbol)?.withTintColor(color, renderingMode: .alwaysOriginal) {
+            let a = NSTextAttachment(image: img)
+            a.bounds = CGRect(x: 0, y: -2, width: 13, height: 13)
+            t.append(NSAttributedString(attachment: a))
+            t.append(NSAttributedString(string: " "))
+        }
+        t.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: 12, weight: .bold), .foregroundColor: UIColor.white]))
+        l.attributedText = t
+        let box = UIView()
+        box.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        box.layer.cornerRadius = 4
+        box.layer.borderColor = color.withAlphaComponent(0.8).cgColor
+        box.layer.borderWidth = 1
+        l.translatesAutoresizingMaskIntoConstraints = false
+        box.addSubview(l)
+        NSLayoutConstraint.activate([
+            l.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 8),
+            l.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -8),
+            l.topAnchor.constraint(equalTo: box.topAnchor, constant: 3),
+            l.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -3),
+        ])
+        if callouts.arrangedSubviews.count >= 4 { callouts.arrangedSubviews.first?.removeFromSuperview() }
+        callouts.addArrangedSubview(box)
+        box.alpha = 0
+        box.transform = CGAffineTransform(translationX: -20, y: 0)
+        UIView.animate(withDuration: 0.15) {
+            box.alpha = 1
+            box.transform = .identity
+        }
+        UIView.animate(withDuration: 0.3, delay: 1.6, options: [], animations: { box.alpha = 0 }) { _ in box.removeFromSuperview() }
     }
 
     /// Tests / demos: let the AI play the player's side.
@@ -301,7 +387,10 @@ final class CoreBattleScreen: Screen {
     private func handle(_ e: BattleEvent) {
         switch e {
         case .cardPlayed(let s, let card, _):
-            if s == 0 { Sound.play(.card) } else { popup(CoreVisuals.cardName(card), over: 1, color: CoreVisuals.kindColor(card.kind), size: 13, rise: 1.2) }
+            if s == 0 { Sound.play(.card) } else {
+                callout((L10n.isZH ? "对手 · " : "Foe · ") + CoreVisuals.cardName(card), color: CoreVisuals.kindColor(card.kind),
+                        symbol: CoreVisuals.kindSymbol(card.kind))
+            }
         case .dash(let s, _):
             let m = model(s)
             m.dash()
@@ -340,18 +429,19 @@ final class CoreBattleScreen: Screen {
             realDelay(0.4) { m.stance() }
             m.setAura(3)
             realDelay(0.9) { m.setAura(0) }
-            popup(supportText(effect), over: s, color: Theme.effect, size: 17)
+            callout((s == 0 ? "" : (L10n.isZH ? "对手 · " : "Foe · ")) + supportText(effect), color: Theme.effect, symbol: "arrow.up.circle.fill")
             Sound.play(.charge)
         case .armorBreak(let s):
-            popup(L10n.isZH ? "霸体" : "ARMOR", over: s, color: Theme.accent, size: 16)
+            callout(L10n.isZH ? "霸体 · 无视气弹" : "SUPER ARMOR", color: Theme.accent, symbol: "shield.fill")
             Sound.play(.crack, pitch: 0.7)
         case .countered(let s):
             popup(L10n.isZH ? "防反！" : "COUNTER!", over: s, color: Theme.special, size: 22)
+            callout(L10n.isZH ? "防反成功 · 对手冻结" : "COUNTER · FROZEN", color: Theme.special, symbol: "snowflake")
             model(1 - s).react(.head, heavy: false)
             Sound.play(.heavy, pitch: 1.2)
             hitStop = 0.12
-        case .shieldBlocked:
-            break
+        case .shieldBlocked(let s):
+            callout(s == 0 ? "BLOCK" : (L10n.isZH ? "对手护盾 BLOCK" : "Foe BLOCK"), color: UIColor(hex: 0x6FC3FF), symbol: "shield.lefthalf.filled")
         case .cinematic(let s, let card):
             banner(CoreVisuals.cardName(card), size: 22, color: CoreVisuals.kindColor(card.kind))
             Sound.play(.charge)
@@ -374,6 +464,12 @@ final class CoreBattleScreen: Screen {
             break
         }
     }
+
+    private static let grouped: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f
+    }()
 
     private func supportText(_ e: SupportEffect) -> String {
         switch e {
@@ -408,7 +504,7 @@ final class CoreBattleScreen: Screen {
         default: Sound.play(h.heavy ? .heavy : .hit)
         }
         // Damage number: ADV (orange-gold, large) / RES (grey-blue, small) / CRIT!
-        var text = "\(Int(h.damage))"
+        var text = Self.grouped.string(from: NSNumber(value: Int(h.damage))) ?? "\(Int(h.damage))"
         var color = UIColor.white
         var size: CGFloat = h.heavy ? 20 : 16
         switch h.matchup {
@@ -533,14 +629,17 @@ final class CoreBattleScreen: Screen {
                 return (a + fw * 3.4 + right * (s == 0 ? 1 : -1) * 0.9 + SIMD3(0, 1.85, 0), model(s).chestWorld + SIMD3(0, 0.45, 0))
             }
         }
-        var pos = p - f * (4.4 + max(0, 3 - gap) * 0.35) + right * 0.75 + SIMD3(0, 2.45, 0)
-        var look = p + f * max(3.2, gap * 0.7) + SIMD3(0, 1.15, 0)
+        // DBL-style framing: 3/4 side view, player lower-left / opponent upper-right, both large on screen.
         let mid = (p + e) / 2
-        pos = simd_mix(pos, p - f * 2.8 + right * 2.5 + SIMD3(0, 1.7, 0), SIMD3(repeating: comboW))
-        look = simd_mix(look, mid + f * 0.4 + SIMD3(0, 1.25, 0), SIMD3(repeating: comboW))
+        var pos = p - f * (2.3 + gap * 0.22) + right * (2.0 + gap * 0.16) + SIMD3(0, 1.55 + gap * 0.04, 0)
+        var look = p + f * (gap * 0.62) + SIMD3(0, 1.15, 0)
+        // Comboing: swing further to the side and close in on the exchange.
+        pos = simd_mix(pos, mid - f * 1.0 + right * (3.0 + gap * 0.1) + SIMD3(0, 1.35, 0), SIMD3(repeating: comboW))
+        look = simd_mix(look, mid + f * 0.3 + SIMD3(0, 1.2, 0), SIMD3(repeating: comboW))
+        // Being comboed: pull back a little to show both.
         let g = guardW * (1 - comboW)
-        pos = simd_mix(pos, p - f * 6.0 + right * 1.1 + SIMD3(0, 3.3, 0), SIMD3(repeating: g))
-        look = simd_mix(look, mid + SIMD3(0, 1.0, 0), SIMD3(repeating: g))
+        pos = simd_mix(pos, p - f * 4.2 + right * 2.6 + SIMD3(0, 2.2, 0), SIMD3(repeating: g))
+        look = simd_mix(look, mid + SIMD3(0, 1.1, 0), SIMD3(repeating: g))
         return (pos, look)
     }
 
@@ -593,13 +692,10 @@ final class CoreBattleScreen: Screen {
         let sp = v.projectPoint(SCNVector3(p.x, p.y, p.z))
         guard sp.z > 0 && sp.z < 1 else { return }
         let l = UILabel()
-        l.text = text
-        l.font = Glass.mono(size, .bold)
-        l.textColor = color
-        l.layer.shadowColor = UIColor.black.cgColor
-        l.layer.shadowOpacity = 0.9
-        l.layer.shadowRadius = 2.5
-        l.layer.shadowOffset = CGSize(width: 0, height: 1.5)
+        l.attributedText = NSAttributedString(string: text, attributes: [
+            .font: UIFont.italic(size * 1.25, .black), .foregroundColor: color,
+            .strokeColor: UIColor.black.withAlphaComponent(0.85), .strokeWidth: -3.5,
+        ])
         l.sizeToFit()
         l.center = CGPoint(x: CGFloat(sp.x), y: CGFloat(sp.y))
         l.isUserInteractionEnabled = false
@@ -680,5 +776,14 @@ final class CoreBattleScreen: Screen {
         case .chargeStart: input(.chargeBegin)
         case .chargeEnd: input(.chargeEnd)
         }
+    }
+}
+
+extension UIFont {
+    /// Heavy italic system font (fighting-game numbers / combo counter).
+    static func italic(_ size: CGFloat, _ weight: UIFont.Weight) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        guard let d = base.fontDescriptor.withSymbolicTraits(base.fontDescriptor.symbolicTraits.union(.traitItalic)) else { return base }
+        return UIFont(descriptor: d, size: size)
     }
 }
