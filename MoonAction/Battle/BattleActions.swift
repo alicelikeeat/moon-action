@@ -349,7 +349,15 @@ extension BattleScreen {
         let right = simd_normalize(simd_cross(dir, SIMD3(0, 1, 0)))
         dir = simd_normalize(dir + right * spread)
         let n = VFX.projectile(color: a.def.aura, radius: radius)
-        VFX.muzzle(at: start, color: a.def.aura, size: CGFloat(radius * 5), in: fxRoot)
+        VFX.muzzle(at: start, color: a.def.aura, size: CGFloat(radius * 7), in: fxRoot)
+        VFX.muzzleSparks(at: start, dir: dir, color: a.def.aura, in: fxRoot)
+        // Recoil: the shooter is pushed back a little, camera nudges when the player fires.
+        let back = SCNAction.moveBy(x: 0, y: 0, z: CGFloat(-0.12 - radius * 0.3), duration: 0.05)
+        back.timingMode = .easeOut
+        let ret = SCNAction.moveBy(x: 0, y: 0, z: CGFloat(0.12 + radius * 0.3), duration: 0.16)
+        ret.timingMode = .easeInEaseOut
+        a.model.body.runAction(.sequence([back, ret]), forKey: "recoil")
+        if s.isPlayer { shake = max(shake, 0.02 + radius * 0.05) }
         n.simdPosition = start
         fxRoot.addChildNode(n)
         let farBonus = RangeZone.of(dist(a, t)) == .far ? 1.1 : 1.0
@@ -383,7 +391,8 @@ extension BattleScreen {
                         p.alive = false
                         applyHit(from: p.owner, power: p.power, stun: 0.45, knock: 2.5, heavy: false, aiDodge: 0,
                                  source: SIMD2(p.pos.x - p.vel.x, p.pos.z - p.vel.z))
-                        burst(at: p.pos, color: p.owner.current.def.aura, scale: p.radius * 3)
+                        VFX.impact(at: p.pos, color: p.owner.current.def.aura, heavy: p.radius >= 0.3, in: fxRoot,
+                                   dir: simd_normalize(p.vel))
                     }
                 }
             }
@@ -783,16 +792,23 @@ extension BattleScreen {
         if basic { s.energy = min(Tune.energyMax, s.energy + 2) }
 
         let hitPoint = t.chest + SIMD3(0, 0.1, 0)
-        spark(at: hitPoint, color: a.def.aura, big: heavy || crit)
+        let ranged = source != nil
+        let hitDir = simd_normalize(SIMD3(away.x, 0.15, away.y))
+        spark(at: hitPoint, color: a.def.aura, big: heavy || crit, dir: hitDir)
         popup(crit ? "\(Int(dmg))!" : "\(Int(dmg))", at: hitPoint + SIMD3(Float.random(in: -0.3...0.3), 0.5, 0),
-              color: crit ? Theme.accent : .white, size: crit ? 24 : (heavy ? 20 : 16))
-        shake = max(shake, heavy ? 0.16 : 0.04)
-        if heavy {
-            hitStop = 0.07
-            fovKick = max(fovKick, 4)
+              color: crit ? Theme.accent : .white, size: crit ? 26 : (heavy ? 21 : 16))
+        // Hit stop scaled by hit weight (light jab → heavy launcher → critical), like arcade fighters.
+        let stop: Double = (heavy ? 0.11 : (basic ? 0.045 : 0.065)) + (crit ? 0.035 : 0)
+        beginHitStop(stop, attacker: ranged && dist(a, t) > 3 ? nil : a, victim: t, shake: heavy ? 0.07 : 0.035)
+        kickCamera(from: a.world3, to: t.world3, strength: heavy ? 0.32 : (basic ? 0.07 : 0.12))
+        shake = max(shake, heavy ? 0.1 : 0.025)
+        if heavy || crit { fovKick = max(-6, fovKick - (heavy ? 4 : 2)) }
+        if heavy { hud.screenFlash(UIColor(white: 1, alpha: 0.5)) }
+        Sound.play(heavy || crit ? .heavy : .hit)
+        if heavy && !basic { Sound.play(.hit) }
+        if s.isPlayer || o.isPlayer {
+            if crit { Haptics.rigid.impactOccurred(intensity: 1) } else { Haptics.hit(heavy) }
         }
-        Sound.play(heavy ? .heavy : .hit)
-        if s.isPlayer || o.isPlayer { Haptics.hit(heavy) }
 
         s.addSoul(heavy ? 4 : 2)
         o.addSoul(heavy ? 3.5 : 1.8)
@@ -812,6 +828,9 @@ extension BattleScreen {
         side.charging = false
         c.model.ko()
         Sound.play(.ko)
+        // KO: long freeze-frame + flash before the slow-motion replay angle.
+        beginHitStop(0.22, attacker: opponent(of: side).current, victim: c, shake: 0.09)
+        hud.screenFlash(.white)
         shake = 0.3
         hud.banner(L("battle.ko"), color: Theme.hpEnemy, big: true, duration: 0.9)
         timeScale = 0.3

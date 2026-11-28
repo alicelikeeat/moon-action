@@ -22,6 +22,12 @@ final class BattleScreen: Screen {
     var timeLeft = Tune.battleTime
     var timeScale: Double = 1
     var hitStop: Double = 0
+    /// Model roots frozen during hit stop (attacker + defender), and the defender that shakes.
+    var frozenRoots: [SCNNode] = []
+    var hitVictim: Combatant?
+    var hitShakeAmp: Float = 0
+    /// Directional camera kick (pushed along the hit direction, springs back).
+    var camKick = SIMD3<Float>(repeating: 0)
     var hud: BattleHUD!
     var startZone: RangeZone = .mid
     var fxRoot = SCNNode()
@@ -138,6 +144,7 @@ final class BattleScreen: Screen {
         if hitStop > 0 {
             hitStop -= rawDT
             dt = 0
+            if hitStop <= 0 { endHitStop() }
         }
         timeline.tick(dt)
         if started && !battleOver && !cinematic {
@@ -159,6 +166,11 @@ final class BattleScreen: Screen {
         }
         for s in [player!, enemy!] { moveCombatant(s.current, dt) }
         separate()
+        // Fighting-game hit shake: the defender vibrates in place while frozen.
+        if hitStop > 0, let v = hitVictim {
+            let a = hitShakeAmp * Float(min(1, hitStop * 12))
+            v.model.root.simdPosition += SIMD3(Float.random(in: -a...a), 0, Float.random(in: -a...a))
+        }
         updateFacing()
         applyCamera(dt: Float(rawDT))
         hud.update(dt: rawDT)
@@ -292,7 +304,8 @@ final class BattleScreen: Screen {
         }
         camPos += (targetPos - camPos) * k
         camLook += (targetLook - camLook) * k
-        var p = camPos
+        var p = camPos + camKick
+        camKick *= max(0, 1 - dt * 14)
         if shake > 0.001 {
             p += SIMD3(Float.random(in: -shake...shake), Float.random(in: -shake...shake), Float.random(in: -shake...shake))
             shake *= max(0, 1 - dt * 9)
@@ -440,5 +453,35 @@ final class BattleScreen: Screen {
 
     func retreat() {
         go(HomeScreen())
+    }
+}
+
+extension BattleScreen {
+    /// Freeze-frame hit stop: logic time stops and both fighters' animations pause, the defender shakes.
+    func beginHitStop(_ duration: Double, attacker: Combatant?, victim: Combatant, shake amp: Float) {
+        guard duration > 0 else { return }
+        if hitStop <= 0 { frozenRoots.forEach { $0.isPaused = false }; frozenRoots = [] }
+        hitStop = max(hitStop, duration)
+        for n in [attacker?.model.root, victim.model.root].compactMap({ $0 }) where !frozenRoots.contains(n) {
+            n.isPaused = true
+            frozenRoots.append(n)
+        }
+        hitVictim = victim
+        hitShakeAmp = amp
+    }
+
+    func endHitStop() {
+        frozenRoots.forEach { $0.isPaused = false }
+        frozenRoots = []
+        hitVictim = nil
+        hitStop = 0
+    }
+
+    /// Push the camera along the hit direction (world space); it springs back in a few frames.
+    func kickCamera(from a: SIMD3<Float>, to b: SIMD3<Float>, strength: Float) {
+        var d = b - a
+        d.y = 0
+        guard simd_length(d) > 1e-3 else { return }
+        camKick += simd_normalize(d) * strength + SIMD3(0, -strength * 0.3, 0)
     }
 }

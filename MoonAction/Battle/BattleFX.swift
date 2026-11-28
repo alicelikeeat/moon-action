@@ -3,8 +3,8 @@ import SceneKit
 import simd
 
 extension BattleScreen {
-    func spark(at p: SIMD3<Float>, color: UIColor, big: Bool) {
-        VFX.impact(at: p, color: color, heavy: big, in: fxRoot)
+    func spark(at p: SIMD3<Float>, color: UIColor, big: Bool, dir: SIMD3<Float>? = nil) {
+        VFX.impact(at: p, color: color, heavy: big, in: fxRoot, dir: dir)
         if big { hud.speedLines(0.18) }
     }
 
