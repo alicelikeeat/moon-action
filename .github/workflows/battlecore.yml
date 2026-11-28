@@ -1,0 +1,28 @@
+name: BattleCore tests
+
+on:
+  push:
+    paths:
+      - "Packages/BattleCore/**"
+      - ".github/workflows/battlecore.yml"
+  workflow_dispatch:
+
+jobs:
+  swift-test:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; fi
+          swift --version
+
+      - name: swift test (BattleCore)
+        working-directory: Packages/BattleCore
+        run: |
+          set -o pipefail
+          swift build -Xswiftc -warnings-as-errors 2>&1 | tail -40
+          swift test 2>&1 | tail -80

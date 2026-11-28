@@ -38,7 +38,7 @@ All UI uses native UIKit controls in the iOS 26 Liquid Glass style:
 - `.glass()` and `.prominentGlass()` buttons;
 - SF Symbols and the SF Rounded font.
 
-On iOS 15–18 the same controls fall back to blur materials.
+On iOS 16–18 the same controls fall back to blur materials.
 
 ## Copyright / IP
 
@@ -57,7 +57,7 @@ open MoonAction.xcodeproj
 CI (`.github/workflows/build-ipa.yml`) builds an unsigned IPA on a macOS runner with Xcode 26.
 It also runs the app in the iOS Simulator in demo modes (`-demo home|team|summon|battle|special|ultimate|result`) to capture screenshots, then publishes everything as a GitHub Release.
 
-Requirements: iOS 15+, portrait.
+Requirements: iOS 16+, portrait.
 
 ## Importing 3D models (GLB / USDZ)
 

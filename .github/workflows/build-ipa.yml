@@ -95,7 +95,7 @@ jobs:
             * Native iOS 26 Liquid Glass UI
 
             This IPA is **not signed**. Sideload it with a tool that re-signs the app
-            (e.g. AltStore, Sideloadly, or TrollStore on supported devices). Requires iOS 15+.
+            (e.g. AltStore, Sideloadly, or TrollStore on supported devices). Requires iOS 16+.
 
       - name: Build for simulator
         run: |
