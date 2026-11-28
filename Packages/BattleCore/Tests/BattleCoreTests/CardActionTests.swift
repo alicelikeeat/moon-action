@@ -8,7 +8,7 @@ final class CardActionTests: XCTestCase {
     private let special = ArtsCard(id: "t.sp", en: "SP", zh: "SP", kind: .special, power: 2.5, hits: 6)
 
     private func engine(_ p: FighterDef = FighterRoster.kai, _ e: FighterDef = FighterRoster.lan, ki: Double = 100) -> BattleEngine {
-        var b = BattleEngine(player: [p, FighterRoster.sera, FighterRoster.lan], enemy: [e, FighterRoster.zero, FighterRoster.aegis])
+        var b = BattleEngine(player: [p, FighterRoster.sera, FighterRoster.lan], enemy: [e, FighterRoster.sephi, FighterRoster.kross])
         b.sides[0].ki = ki
         b.sides[1].ki = ki
         b.rng = SplitMix64(seed: 99)
@@ -50,10 +50,10 @@ final class CardActionTests: XCTestCase {
         XCTAssertEqual(b.sides[0].ki, 10)
     }
 
-    func testBlastDiscountPassive() {
+    func testCardCosts() {
         let b = engine(FighterRoster.nova)
-        XCTAssertEqual(b.cost(of: blast, side: 0), 25)
-        XCTAssertEqual(b.cost(of: blast, side: 1), 30)
+        XCTAssertEqual(b.cost(of: blast, side: 0), 30)
+        XCTAssertEqual(b.cost(of: strike, side: 1), 20)
     }
 
     func testOrbCardsFillTheRushGauge() {
@@ -215,10 +215,10 @@ final class CardActionTests: XCTestCase {
         b.setHand(side: 0, slot: 0, card: FighterRoster.kai.deck.first { $0.kind == .support }!)
         XCTAssertTrue(b.apply(.play(0), side: 0))
         XCTAssertEqual(b.sides[0].ki, 20 - 15 + 35, accuracy: 0.01)
-        XCTAssertEqual(b.sides[0].current.nextStrikeBonus, 0.25)
+        XCTAssertEqual(b.sides[0].current.nextStrikeBonus, 0.3)
 
         var c = engine()
-        c.setHand(side: 0, slot: 0, card: FighterRoster.aegis.deck.first { $0.kind == .support }!)
+        c.setHand(side: 0, slot: 0, card: FighterRoster.nova.deck.first { $0.kind == .support }!)
         c.apply(.play(0), side: 0)
         run(&c, 0.4)
         c.setHand(side: 1, slot: 0, card: strike)
@@ -239,7 +239,7 @@ final class CardActionTests: XCTestCase {
         let ev = run(&b, 1.0)
         XCTAssertTrue(ev.contains(.ko(side: 1, fighter: 0)))
         XCTAssertTrue(ev.contains(.switched(side: 1, to: 1)))
-        XCTAssertEqual(b.sides[1].current.hp, FighterRoster.zero.maxHP, "entrant protected")
+        XCTAssertEqual(b.sides[1].current.hp, FighterRoster.sephi.maxHP, "entrant protected")
         XCTAssertFalse(b.over)
     }
 

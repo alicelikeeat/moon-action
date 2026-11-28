@@ -48,7 +48,7 @@ final class CoreBattleScreen: Screen {
     private let callouts = UIStackView()
     private var resignObserver: NSObjectProtocol?
 
-    init(player: [String] = ["sera", "kai", "lan"], enemy: [String] = ["nova", "zero", "aegis"],
+    init(player: [String] = ["sera", "kai", "lan"], enemy: [String] = ["nova", "kross", "sephi"],
          difficulty: Difficulty = .standard, seed: UInt64 = UInt64.random(in: 1...UInt64.max)) {
         let p = player.compactMap { FighterRoster.byID($0) }
         let e = enemy.compactMap { FighterRoster.byID($0) }
@@ -503,6 +503,8 @@ final class CoreBattleScreen: Screen {
         case .teamHeal: return L10n.isZH ? "全队回复" : "TEAM HEAL"
         case .freezeCounter: return L10n.isZH ? "防反架势" : "COUNTER STANCE"
         case .kiBurst: return L10n.isZH ? "气功爆发" : "KI BURST"
+        case .kiCoverNull: return L10n.isZH ? "协防封锁" : "COVER NULL"
+        case .gravityBind: return L10n.isZH ? "重力束缚" : "GRAVITY BIND"
         }
     }
 

@@ -40,7 +40,7 @@ extension BattleEngine {
             sides[o].comboCards = 0
             sides[o].comboHits = 0
             // Special cover: matching tag knocks the attacker away to long range (once per combo).
-            if let card = interrupted?.card, !sides[s].specialCoverUsed,
+            if let card = interrupted?.card, !sides[s].specialCoverUsed, time >= sides[o].coverNullUntil,
                (n.def.cover == .strike && card.kind == .strike) || (n.def.cover == .blast && card.kind == .blast) {
                 special = true
                 sides[s].specialCoverUsed = true

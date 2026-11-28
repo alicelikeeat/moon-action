@@ -4,7 +4,7 @@ import XCTest
 final class EngineStateTests: XCTestCase {
     private func engine() -> BattleEngine {
         BattleEngine(player: [FighterRoster.kai, FighterRoster.lan, FighterRoster.sera],
-                     enemy: [FighterRoster.nova, FighterRoster.zero, FighterRoster.aegis])
+                     enemy: [FighterRoster.nova, FighterRoster.sephi, FighterRoster.kross])
     }
 
     @discardableResult
@@ -110,7 +110,7 @@ final class EngineStateTests: XCTestCase {
         var e = BattleEngine(player: [FighterRoster.sera], enemy: [FighterRoster.kai])
         let ev = e.damage(1e9, to: 0)
         XCTAssertEqual(ev, [.tenacity(side: 0)])
-        XCTAssertEqual(e.sides[0].current.hp, 1)
+        XCTAssertEqual(e.sides[0].current.hp, 1 + FighterRoster.sera.maxHP * 0.25, accuracy: 1, "Endurance: 1 HP + 25 %")
         _ = e.damage(1e9, to: 0)
         XCTAssertTrue(e.sides[0].current.isKO)
     }

@@ -11,6 +11,8 @@ public enum FighterPhase: Sendable, Equatable {
 
 public struct FighterState: Sendable {
     public let def: FighterDef
+    /// Resolved battle stats (level, stars, Z ability, leader, equipment).
+    public let stats: FinalStats
     public var hp: Double
     public var vanish: Double = Tune.vanishMax
     public var phase: FighterPhase = .idle
@@ -31,11 +33,13 @@ public struct FighterState: Sendable {
     public internal(set) var damageBonus: Double = 0
     public internal(set) var statBonus: Double = 0
 
-    public init(def: FighterDef) {
+    public init(def: FighterDef, stats: FinalStats? = nil) {
         self.def = def
-        self.hp = def.maxHP
+        self.stats = stats ?? FinalStats(def.benchmark)
+        self.hp = self.stats.hp
     }
 
+    public var maxHP: Double { stats.hp }
     public var isKO: Bool { phase == .ko }
     public var canAct: Bool { phase == .idle || phase == .moving || phase == .charging }
 }
@@ -56,6 +60,13 @@ public struct SideState: Sendable {
     public internal(set) var comboCards = 0
     public internal(set) var comboHits = 0
     public internal(set) var fastDrawUntil: Double = 0
+    /// Cover nullification: until then the opponent's special covers cannot interrupt this side's combos.
+    public internal(set) var coverNullUntil: Double = 0
+    /// Team-wide damage up from a main ability (e.g. Lan) until a time.
+    public internal(set) var teamDamageUp: Double = 0
+    public internal(set) var teamDamageUntil: Double = 0
+    public func teamDamageBonus(at t: Double) -> Double { t < teamDamageUntil ? teamDamageUp : 0 }
+
     /// A special cover change was used during the opponent's current combo.
     public internal(set) var specialCoverUsed = false
 
@@ -65,8 +76,10 @@ public struct SideState: Sendable {
     }
     public var allKO: Bool { team.allSatisfy { $0.isKO } }
 
-    public init(team: [FighterDef]) {
-        self.team = team.map { FighterState(def: $0) }
+    public init(team: [FighterDef], stats: [FinalStats]? = nil) {
+        self.team = team.enumerated().map { i, d in
+            FighterState(def: d, stats: stats.flatMap { $0.indices.contains(i) ? $0[i] : nil })
+        }
     }
 }
 
@@ -144,8 +157,15 @@ public struct BattleEngine: Sendable {
     var lastZone: Zone
     var nextCardID = 1
 
-    public init(player: [FighterDef], enemy: [FighterDef], startZone: Zone = .mid, seed: UInt64 = 0x5EED) {
-        sides = [SideState(team: player), SideState(team: enemy)]
+    /// Battle from full loadouts: final stats come from level, stars, Z abilities (leader = first), Ultra and equipment.
+    public init(player: [FighterLoadout], enemy: [FighterLoadout], startZone: Zone = .mid, seed: UInt64 = 0x5EED) {
+        self.init(player: player.map(\.def), enemy: enemy.map(\.def), startZone: startZone, seed: seed,
+                  playerStats: TeamBuild.finalStats(team: player), enemyStats: TeamBuild.finalStats(team: enemy))
+    }
+
+    public init(player: [FighterDef], enemy: [FighterDef], startZone: Zone = .mid, seed: UInt64 = 0x5EED,
+                playerStats: [FinalStats]? = nil, enemyStats: [FinalStats]? = nil) {
+        sides = [SideState(team: player, stats: playerStats), SideState(team: enemy, stats: enemyStats)]
         gap = Tune.zoneGap[startZone] ?? 6.2
         gapTo = gap
         lastZone = Zone.of(gap)
@@ -212,7 +232,7 @@ public struct BattleEngine: Sendable {
             switch f.phase {
             case .charging: side.ki = min(Tune.kiMax, side.ki + Tune.chargeRate * dt)
             case .ko: break
-            default: side.ki = min(Tune.kiMax, side.ki + Tune.kiRegen * dt)
+            default: side.ki = min(Tune.kiMax, side.ki + Tune.kiRegen * (1 + f.stats.kiRecoveryUp) * dt)
             }
             if !f.isKO { f.vanish = min(Tune.vanishMax, f.vanish + Tune.vanishRegen * dt) }
             side.current = f
@@ -302,9 +322,10 @@ public struct BattleEngine: Sendable {
         var f = sides[s].current
         let dealt = min(f.hp, max(0, amount))
         f.hp -= dealt
-        if f.hp <= 0, f.def.has(.tenacity), !f.tenacityUsed {
+        if f.hp <= 0, let heal = f.def.tenacityHeal, !f.tenacityUsed {
+            // Endurance: survive at 1 HP, then recover a fraction of max HP.
             f.tenacityUsed = true
-            f.hp = 1
+            f.hp = 1 + f.maxHP * heal
             events.append(.tenacity(side: s))
         }
         sides[1 - s].damageDealt += dealt

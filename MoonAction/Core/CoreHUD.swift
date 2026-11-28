@@ -68,7 +68,7 @@ final class CoreHUDModel: ObservableObject {
         let p = e.sides[0], q = e.sides[1]
         set(\.player, vm(p.current))
         set(\.enemy, vm(q.current))
-        set(\.enemyBench, q.team.indices.filter { $0 != q.active }.map { max(0, q.team[$0].hp) / q.team[$0].def.maxHP })
+        set(\.enemyBench, q.team.indices.filter { $0 != q.active }.map { max(0, q.team[$0].hp) / q.team[$0].maxHP })
         set(\.ki, Int(p.ki))
         set(\.vanish, Int(p.current.vanish))
         set(\.combo, p.comboHits)
@@ -78,7 +78,7 @@ final class CoreHUDModel: ObservableObject {
         set(\.switchCooldown, Int(e.switchCooldown(side: 0).rounded(.up)))
         set(\.bench, p.team.indices.filter { $0 != p.active }.map { i in
             let f = p.team[i]
-            return BenchVM(id: i, name: CoreVisuals.name(f.def), element: f.def.element, hp: max(0, f.hp) / f.def.maxHP, ko: f.isKO,
+            return BenchVM(id: i, name: CoreVisuals.name(f.def), element: f.def.element, hp: max(0, f.hp) / f.maxHP, ko: f.isKO,
                            image: Portraits.image(CoreVisuals.visual(f.def), .bust, size: CGSize(width: 56, height: 56)))
         })
         let cards: [CardVM?] = (0..<4).map { i in
@@ -90,7 +90,7 @@ final class CoreHUDModel: ObservableObject {
     }
 
     private func vm(_ f: FighterState) -> FighterVM {
-        FighterVM(name: CoreVisuals.name(f.def), element: f.def.element, hp: Int(f.hp.rounded(.up)), maxHP: Int(f.def.maxHP),
+        FighterVM(name: CoreVisuals.name(f.def), element: f.def.element, hp: Int(f.hp.rounded(.up)), maxHP: Int(f.maxHP),
                   portraitID: f.def.id)
     }
 }

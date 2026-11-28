@@ -1,3 +1,10 @@
+## v2 阶段 1 · Phase 1 — BattleCore 数据层 / Data layer
+- 新阵容 6 人：克洛斯 UL 红 · 瑟菲 UL 蓝 · 凯 LL 紫 · 诺瓦 LL 黄 · 岚 SP 绿 · 塞拉 SP 光 / New 6-fighter roster (2 UL, 2 LL, 2 SP)
+- 等级 1–5000、星级 1–14、Z 能力 I–IV、队长规则、UL 极限能力 / Levels, stars, Z abilities, leader rules, Ultra ability
+- 10 件装备模板，3 词条、绿/金/红珠、B→神 评级、安全重铸 / 10 equipment templates, beads, grades, secure reforge
+- 分层伤害公式 + 连击递减 100/95/85/75/65/50% / Layered damage formula + combo decay
+- JSON 存档 / JSON save data
+
 <!-- 每次发布时，本文件内容会作为「更新说明」出现在 GitHub Release 页面顶部。 -->
 
 ### 换人回来了 · Tag switching is back

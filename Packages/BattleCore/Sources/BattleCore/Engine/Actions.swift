@@ -32,6 +32,8 @@ public struct Shot: Sendable, Equatable {
     public let comboIndex: Int
     public let index: Int
     public let fromCard: Bool
+    /// The whole card's multiplier (for the per-card defense subtraction).
+    public let cardTotal: Double
     public internal(set) var warned = false
 }
 
@@ -182,13 +184,21 @@ extension BattleEngine {
         case .teamHeal(let x):
             sides[s].current = f
             for i in sides[s].team.indices where !sides[s].team[i].isKO {
-                let m = sides[s].team[i].def.maxHP
+                let m = sides[s].team[i].maxHP
                 sides[s].team[i].hp = min(m, sides[s].team[i].hp + m * x)
             }
             f = sides[s].current
         case .freezeCounter(let window, let stun):
             f.counterUntil = time + window
             f.counterStun = stun
+        case .kiCoverNull(let ki, let duration):
+            sides[s].ki = min(Tune.kiMax, sides[s].ki + ki)
+            sides[s].coverNullUntil = time + duration
+        case .gravityBind(let duration):
+            moveGap(to: Tune.zoneGap[.close] ?? 2.2, over: 0.25)
+            sides[s].current = f
+            stun(side: 1 - s, until: time + duration)
+            f = sides[s].current
         case .kiBurst(let ki):
             sides[s].ki = min(Tune.kiMax, sides[s].ki + ki)
             let o = 1 - s
@@ -209,11 +219,11 @@ extension BattleEngine {
         if zone == .close {
             let times = (0..<3).map { time + 0.08 + Double($0) * 0.14 }
             f.action = Action(card: nil, kind: .basic, start: time, times: times, end: times.last! + 0.2,
-                              dashUntil: 0, comboIndex: 1, perHit: 0.1, armor: false, bonus: 0)
+                              dashUntil: 0, comboIndex: 1, perHit: 0.55 / 3, armor: false, bonus: 0)
         } else {
-            let pseudo = ArtsCard(id: "basic.shot", en: "Ki Shot", zh: "试探气弹", kind: .blast, cost: 0, power: 0.15, hits: 1)
+            let pseudo = ArtsCard(id: "basic.shot", en: "Ki Shot", zh: "试探气弹", kind: .blast, cost: 0, power: 0.5, hits: 1)
             f.action = Action(card: pseudo, kind: .basic, start: time, times: [time + 0.1], end: time + 0.35,
-                              dashUntil: 0, comboIndex: 1, perHit: 0.15, armor: false, bonus: 0)
+                              dashUntil: 0, comboIndex: 1, perHit: 0.5, armor: false, bonus: 0)
         }
         f.phase = .acting
         f.phaseUntil = f.action!.end
@@ -280,7 +290,7 @@ extension BattleEngine {
                     let big = act.card?.hits == 1 && act.kind == .blast
                     shots.append(Shot(owner: s, target: 1 - s, arrive: time + travel, power: act.perHit,
                                       kind: act.kind, heavy: last && act.kind == .blast, comboIndex: act.comboIndex,
-                                      index: i, fromCard: act.kind == .blast))
+                                      index: i, fromCard: act.kind == .blast, cardTotal: act.card?.power ?? act.perHit))
                     events.append(.shotFired(side: s, travel: travel, big: big))
                 } else {
                     events.append(.swing(side: s, kind: act.kind, hitIndex: i, heavy: last && act.kind != .basic))
@@ -303,7 +313,8 @@ extension BattleEngine {
             gap = Self.strikeStand
         }
         landHit(attacker: s, kind: act.kind, power: act.perHit * (last && act.kind != .basic ? 1.3 : 1),
-                heavy: last && act.kind != .basic, index: i, comboIndex: act.comboIndex, bonus: act.bonus, &events)
+                heavy: last && act.kind != .basic, index: i, comboIndex: act.comboIndex, bonus: act.bonus,
+                cardTotal: act.card?.power ?? act.perHit * Double(act.times.count), &events)
     }
 
     mutating func stepShots(_ events: inout [BattleEvent]) {
@@ -322,7 +333,7 @@ extension BattleEngine {
                 if sh.kind == .basic && act.card != nil && act.kind != .basic { continue }
             }
             landHit(attacker: sh.owner, kind: sh.kind, power: sh.power, heavy: sh.heavy, index: sh.index,
-                    comboIndex: sh.comboIndex, bonus: 0, &events)
+                    comboIndex: sh.comboIndex, bonus: 0, cardTotal: sh.cardTotal, &events)
         }
         shots = remaining
     }
@@ -352,7 +363,7 @@ extension BattleEngine {
     // MARK: Hits
 
     mutating func landHit(attacker s: Int, kind: HitKind, power: Double, heavy: Bool, index: Int, comboIndex: Int,
-                          bonus: Double, _ events: inout [BattleEvent]) {
+                          bonus: Double, cardTotal: Double = 0, _ events: inout [BattleEvent]) {
         let d = 1 - s
         var t = sides[d].current
         var a = sides[s].current
@@ -371,9 +382,20 @@ extension BattleEngine {
             sides[s].current = a
         }
         let reduction = time < t.shieldUntil ? t.shieldReduction : 0
-        let dmg = CombatMath.damage(power: power, attack: a.def.attack * (1 + a.statBonus), defense: t.def.defense * (1 + t.statBonus),
-                                    attacker: a.def.element, defender: t.def.element, cardIndex: comboIndex,
-                                    crit: crit, bonus: bonus + a.damageBonus, reduction: reduction)
+        let melee = kind == .strike || kind == .basic
+        // Strikes / basic melee use strike attack, blasts use blast attack, specials and ultimates the higher one.
+        let base = kind == .blast ? a.stats.blastAtk : (melee ? a.stats.strikeAtk : max(a.stats.strikeAtk, a.stats.blastAtk))
+        let atk = base * (1 + a.statBonus)
+        var up = a.stats.damageUp + a.damageBonus + bonus + sides[s].teamDamageBonus(at: time)
+        if kind == .special { up += a.stats.specialDamageUp }
+        if kind == .ultimate { up += a.stats.ultimateDamageUp }
+        // Per-hit share of the whole card's layered damage (defense is subtracted once per card).
+        let cardMultiplier = max(power, cardTotal)
+        let whole = CombatMath.damage(attack: atk, cardMultiplier: cardMultiplier, defense: t.stats.defense * (1 + t.statBonus),
+                                      damageUp: up, damageCut: t.stats.damageCut + reduction,
+                                      attacker: a.def.element, defender: t.def.element, cardIndex: comboIndex,
+                                      crit: crit, variance: CombatMath.varianceRange.lowerBound + rng.unit() * 0.06)
+        let dmg = max(1, (whole * power / cardMultiplier).rounded())
         if kind != .basic, var act = sides[s].current.action, !act.counted {
             act.counted = true
             sides[s].current.action = act

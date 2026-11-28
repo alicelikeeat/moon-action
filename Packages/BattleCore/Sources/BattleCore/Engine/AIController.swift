@@ -77,7 +77,7 @@ public struct AIController: Sendable {
             decidedThreat = false
         }
         // Tag out when low on HP: cover change while being comboed, or a normal switch in neutral.
-        if me.hp < me.def.maxHP * 0.35, let mate = bestTeammate(e) {
+        if me.hp < me.maxHP * 0.35, let mate = bestTeammate(e) {
             let comboed = me.phase == .stunned
             if (comboed && e.rng.chance(difficulty == .challenge ? 0.04 : 0.015)) || (me.canAct && e.time >= nextThink && e.rng.chance(0.5)) {
                 if e.apply(.switchTo(mate), side: side, events: &events) {
@@ -126,7 +126,7 @@ public struct AIController: Sendable {
         var best: (Int, Double)?
         for i in e.sides[side].team.indices where e.canSwitch(side: side, to: i) {
             let f = e.sides[side].team[i]
-            var score = f.hp / f.def.maxHP
+            var score = f.hp / f.maxHP
             if Element.matchup(attacker: f.def.element, defender: foe) == .advantage { score += 0.3 }
             if best == nil || score > best!.1 { best = (i, score) }
         }
@@ -146,7 +146,7 @@ public struct AIController: Sendable {
             case .ultimate: score = 3.0
             case .support:
                 let me = e.sides[side].current
-                if case .teamHeal? = c.support { score = me.hp < me.def.maxHP * 0.6 ? 2.2 : 0.3 } else { score = chaining ? 0.1 : 1.0 }
+                if case .teamHeal? = c.support { score = me.hp < me.maxHP * 0.6 ? 2.2 : 0.3 } else { score = chaining ? 0.1 : 1.0 }
             }
             if chaining && c.kind == .support { score *= 0.1 }
             score += e.rng.unit() * 0.4

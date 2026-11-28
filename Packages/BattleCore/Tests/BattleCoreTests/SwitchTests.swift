@@ -4,8 +4,8 @@ import XCTest
 final class SwitchTests: XCTestCase {
     private let strike = ArtsCard(id: "t.s", en: "S", zh: "S", kind: .strike, power: 1, hits: 4)
 
-    private func engine(_ team: [FighterDef] = [FighterRoster.lan, FighterRoster.kai, FighterRoster.aegis]) -> BattleEngine {
-        var b = BattleEngine(player: team, enemy: [FighterRoster.nova, FighterRoster.zero, FighterRoster.sera], seed: 5)
+    private func engine(_ team: [FighterDef] = [FighterRoster.lan, FighterRoster.kai, FighterRoster.kross]) -> BattleEngine {
+        var b = BattleEngine(player: team, enemy: [FighterRoster.nova, FighterRoster.sephi, FighterRoster.sera], seed: 5)
         b.sides[0].ki = 50
         b.sides[1].ki = 100
         return b
@@ -44,12 +44,12 @@ final class SwitchTests: XCTestCase {
 
     func testSwitchOutKiPassive() {
         var b = engine()
-        XCTAssertTrue(b.apply(.switchTo(1), side: 0))       // Lan leaves: +25 Ki
-        XCTAssertEqual(b.sides[0].ki, 75, accuracy: 0.01)
+        XCTAssertTrue(b.apply(.switchTo(1), side: 0))       // Lan leaves: +30 Ki
+        XCTAssertEqual(b.sides[0].ki, 80, accuracy: 0.01)
     }
 
     func testCoverChangeInterruptsTheCombo() {
-        var b = engine([FighterRoster.lan, FighterRoster.sera, FighterRoster.zero])
+        var b = engine([FighterRoster.lan, FighterRoster.nova, FighterRoster.sephi])     // Nova: blast cover only
         b.setHand(side: 1, slot: 0, card: strike)
         b.apply(.play(0), side: 1)
         run(&b, 0.35)                                       // first hits land
@@ -65,7 +65,7 @@ final class SwitchTests: XCTestCase {
     }
 
     func testSpecialCoverKnocksAttackerAwayOncePerCombo() {
-        var b = engine([FighterRoster.lan, FighterRoster.kai, FighterRoster.aegis])   // Kai: strike cover
+        var b = engine([FighterRoster.lan, FighterRoster.kai, FighterRoster.kross])   // Kai: strike cover
         b.setHand(side: 1, slot: 0, card: strike)
         b.apply(.play(0), side: 1)
         run(&b, 0.35)
@@ -75,6 +75,19 @@ final class SwitchTests: XCTestCase {
         XCTAssertEqual(b.sides[1].current.phase, .stunned)
         run(&b, 0.4)
         XCTAssertEqual(b.zone, .long)
+    }
+
+    func testCoverNullificationBlocksSpecialCover() {
+        var b = engine([FighterRoster.lan, FighterRoster.kai, FighterRoster.kross])
+        b.setHand(side: 1, slot: 1, card: FighterRoster.kross.deck.first { $0.kind == .support }!)   // +30 Ki, 10 s cover null
+        XCTAssertTrue(b.apply(.play(1), side: 1))
+        run(&b, 0.4)
+        b.setHand(side: 1, slot: 0, card: strike)
+        b.apply(.play(0), side: 1)
+        run(&b, 0.35)
+        var ev: [BattleEvent] = []
+        XCTAssertTrue(b.apply(.switchTo(1), side: 0, events: &ev))
+        XCTAssertTrue(ev.contains(.tagged(side: 0, to: 1, cover: true, special: false)), "cover null: plain cover only")
     }
 
     func testStunnedCanCoverButActingCannotSwitch() {

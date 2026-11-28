@@ -6,7 +6,7 @@ import BattleCore
 enum CoreVisuals {
     /// Visual roster entry (keeps the id so imported models and portraits resolve).
     private static let modelID: [String: String] = [
-        "kai": "kai", "nova": "nova", "zero": "nyx", "lan": "luna", "aegis": "rook", "sera": "aria",
+        "kross": "drake", "sephi": "mira", "kai": "kai", "nova": "nova", "lan": "luna", "sera": "aria",
     ]
 
     static func color(_ e: BattleCore.Element) -> UIColor {
@@ -32,7 +32,7 @@ enum CoreVisuals {
         var look = base.look
         look.aura = color(d.element)
         return FighterDef(id: base.id, name: Text(d.nameEN, d.nameZH), title: Text(d.roleZH, d.roleZH), rarity: base.rarity,
-                          speed: base.speed, look: look, hp: d.maxHP, atk: d.attack, defense: d.defense, cards: base.cards,
+                          speed: base.speed, look: look, hp: d.benchmark.hp, atk: max(d.benchmark.strikeAtk, d.benchmark.blastAtk), defense: d.benchmark.defense, cards: base.cards,
                           effectCard: base.effectCard, specialName: base.specialName, specialStyle: base.specialStyle,
                           specialPower: base.specialPower, ultimateName: base.ultimateName, ultimateStyle: base.ultimateStyle,
                           ultimatePower: base.ultimatePower)

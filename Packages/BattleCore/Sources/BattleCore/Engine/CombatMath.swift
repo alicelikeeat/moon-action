@@ -13,10 +13,10 @@ public enum Tune {
     public static let switchCooldown = 10.0
     public static let moveTime = 0.3
     /// Gap (metres) used for each zone when moving into it.
-    public static let zoneGap: [Zone: Double] = [.close: 2.6, .mid: 6.2, .long: 11.0]
+    public static let zoneGap: [Zone: Double] = [.close: 2.2, .mid: 6.5, .long: 12.0]
     public static let dashGap = 1.6               // swipe up at close range: dash into the opponent's face
-    public static let closeMax = 3.6
-    public static let midMax = 8.0
+    public static let closeMax = 4.0
+    public static let midMax = 9.5
 }
 
 public enum Zone: Int, Sendable, Comparable, CaseIterable {
@@ -33,25 +33,29 @@ public enum Zone: Int, Sendable, Comparable, CaseIterable {
 }
 
 public enum CombatMath {
-    /// Combo compensation by card position in one combo (1-based):
-    /// cards 1–2 full damage, then 100% → 90% → 80% → 70% → 60% from the 3rd card on.
+    /// Combo compensation by card order within one combo (1-based):
+    /// 100 % → 95 % → 85 % → 75 % → 65 % → 50 % (6th card and later).
+    public static let comboTable: [Double] = [1.0, 0.95, 0.85, 0.75, 0.65, 0.5]
+
     public static func comboScale(cardIndex: Int) -> Double {
-        guard cardIndex >= 3 else { return 1 }
-        return max(0.6, 1.0 - 0.1 * Double(cardIndex - 3))
+        comboTable[min(comboTable.count - 1, max(0, cardIndex - 1))]
     }
 
-    /// Damage of one hit.
-    /// - power: share of the card's power carried by this hit
-    /// - bonus: additive damage bonus (buffs), reduction: fraction blocked (shields)
-    public static func damage(power: Double, attack: Double, defense: Double,
+    public static let critFactor = 1.25
+    public static let varianceRange = 0.97...1.03
+
+    /// Layered damage (brief §8):
+    /// Raw = max(1, ATK × CardMultiplier − DEF × 0.55)
+    /// Buff = (1 + DamageUp) × max(0.2, 1 − max(0, DamageCut − CutPenetration))
+    /// Final = Int(Raw × Buff × Element × Combo × Crit × Variance)
+    public static func damage(attack: Double, cardMultiplier: Double, defense: Double,
+                              damageUp: Double = 0, damageCut: Double = 0, cutPenetration: Double = 0,
                               attacker: Element, defender: Element, cardIndex: Int = 1,
-                              crit: Bool = false, bonus: Double = 0, reduction: Double = 0) -> Double {
-        var d = power * attack * (1000 / (1000 + defense)) * 1.6
-        d *= Element.damageMultiplier(attacker: attacker, defender: defender)
-        d *= comboScale(cardIndex: cardIndex)
-        d *= 1 + bonus
-        d *= max(0, 1 - reduction)
-        if crit { d *= 1.5 }
-        return d.rounded()
+                              crit: Bool = false, variance: Double = 1) -> Double {
+        let raw = max(1, attack * cardMultiplier - defense * 0.55)
+        let buff = (1 + damageUp) * max(0.2, 1 - max(0, damageCut - cutPenetration))
+        let element = Element.damageMultiplier(attacker: attacker, defender: defender)
+        let v = raw * buff * element * comboScale(cardIndex: cardIndex) * (crit ? critFactor : 1) * variance
+        return Double(Int(v))
     }
 }

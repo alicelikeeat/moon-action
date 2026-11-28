@@ -30,6 +30,10 @@ public enum SupportEffect: Sendable, Equatable {
     case freezeCounter(window: Double, stun: Double)
     /// +Ki and remove the opponent's buffs.
     case kiBurst(ki: Double)
+    /// +Ki and cover nullification for a while (the opponent's special covers cannot interrupt).
+    case kiCoverNull(ki: Double, duration: Double)
+    /// Gravity field: pull the opponent in and bind them (stunned, comboable).
+    case gravityBind(duration: Double)
 }
 
 public struct ArtsCard: Sendable, Equatable, Identifiable {
