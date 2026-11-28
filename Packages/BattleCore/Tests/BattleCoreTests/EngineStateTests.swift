@@ -70,10 +70,10 @@ final class EngineStateTests: XCTestCase {
         run(&e, 0.4)
         XCTAssertEqual(e.gap, Tune.dashGap, accuracy: 0.01)
         XCTAssertTrue(e.apply(.moveBack, side: 0))
-        run(&e, 0.4)
+        run(&e, 0.5)                                   // 0.3 s slide + 0.15 s recovery
         XCTAssertEqual(e.zone, .mid)
-        e.apply(.moveBack, side: 0)
-        run(&e, 0.4)
+        XCTAssertTrue(e.apply(.moveBack, side: 0))
+        run(&e, 0.5)
         XCTAssertEqual(e.zone, .long)
         XCTAssertFalse(e.apply(.moveBack, side: 0), "already at the farthest zone")
     }

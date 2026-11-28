@@ -71,7 +71,7 @@ final class CardActionTests: XCTestCase {
         var ev: [BattleEvent] = []
         XCTAssertTrue(b.apply(.play(0), side: 0, events: &ev))
         XCTAssertTrue(ev.contains { if case .dash = $0 { return true }; return false })
-        ev = run(&b, 0.5)
+        ev = run(&b, 0.75)                             // dash in from mid range (6.5 m) then 3 hits
         XCTAssertEqual(b.zone, .close)
         XCTAssertEqual(hits(ev, by: 0).count, 3)
         XCTAssertEqual(b.sides[1].current.phase, .stunned)
