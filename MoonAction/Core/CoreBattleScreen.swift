@@ -410,6 +410,14 @@ final class CoreBattleScreen: Screen {
         case .vanished(let s):
             let m = model(s)
             m.afterimage(in: fx)
+            // Cyan vanish vortex around the fighter.
+            let ring = SCNNode(geometry: SCNTorus(ringRadius: 0.7, pipeRadius: 0.035))
+            ring.geometry?.materials = [Toon.energy(UIColor(hex: 0x7FE8FF), alpha: 0.85)]
+            ring.simdPosition = m.root.simdWorldPosition + SIMD3(0, 1.1, 0)
+            ring.simdEulerAngles = SIMD3(0.35, 0, 0)
+            fx.addChildNode(ring)
+            ring.runAction(.sequence([.group([.scale(to: 2.0, duration: 0.28), .rotateBy(x: 0, y: 3, z: 0, duration: 0.28),
+                                              .fadeOut(duration: 0.28)]), .removeFromParentNode()]))
             lateral[s] = (lateral[s] >= 0 ? -1 : 1) * 1.5
             m.setVisible(false)
             realDelay(0.16) { m.setVisible(true) }
@@ -629,10 +637,11 @@ final class CoreBattleScreen: Screen {
                 return (a + fw * 3.4 + right * (s == 0 ? 1 : -1) * 0.9 + SIMD3(0, 1.85, 0), model(s).chestWorld + SIMD3(0, 0.45, 0))
             }
         }
-        // DBL-style framing: 3/4 side view, player lower-left / opponent upper-right, both large on screen.
+        // DBL framing in neutral: behind the player, a little to the left, chest height — the player stands
+        // large right of center with the opponent ahead. Combos switch to the 3/4 side view below.
         let mid = (p + e) / 2
-        var pos = p - f * (2.3 + gap * 0.22) + right * (2.0 + gap * 0.16) + SIMD3(0, 1.55 + gap * 0.04, 0)
-        var look = p + f * (gap * 0.62) + SIMD3(0, 1.15, 0)
+        var pos = p - f * (2.7 + gap * 0.08) - right * 1.15 + SIMD3(0, 1.8, 0)
+        var look = p + f * max(2.8, gap * 0.75) - right * 0.35 + SIMD3(0, 1.2, 0)
         // Comboing: swing further to the side and close in on the exchange.
         pos = simd_mix(pos, mid - f * 1.0 + right * (3.0 + gap * 0.1) + SIMD3(0, 1.35, 0), SIMD3(repeating: comboW))
         look = simd_mix(look, mid + f * 0.3 + SIMD3(0, 1.2, 0), SIMD3(repeating: comboW))
