@@ -47,7 +47,6 @@ func lerp(_ a: Float, _ b: Float, _ t: Float) -> Float { a + (b - a) * t }
 
 func easeOut(_ t: Float) -> Float { 1 - (1 - t) * (1 - t) }
 
-@MainActor
 /// All vibration goes through here so it can be turned off in settings.
 @MainActor
 enum Haptics {
@@ -58,6 +57,7 @@ enum Haptics {
     }
 
     /// Impact generator that respects the setting.
+    @MainActor
     final class Gen {
         private let g: UIImpactFeedbackGenerator
         init(_ style: UIImpactFeedbackGenerator.FeedbackStyle) { g = UIImpactFeedbackGenerator(style: style) }

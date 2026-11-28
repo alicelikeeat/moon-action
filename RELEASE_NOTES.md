@@ -7,6 +7,10 @@
 - **特殊援护 Special cover**：凯（打击援护）/艾格（射击援护）在对应招式打来时换上，会把对手直接击退到远距离（每套连招一次）
 - 岚离场时为队友 +25 气力；AI 血量低于 35% 也会换人
 
+### 修复 · Fixes
+- **v3.1.49 / v3.1.50 是坏包，请不要安装**（编译失败但仍被打包）。本版修复了编译错误，并加强了发布检查：只有完整编译成功、可执行文件存在时才会发布
+  **v3.1.49 / v3.1.50 were broken builds — please don't install them.** Fixed, and releases now require a successful build
+
 ### 震动开关 · Vibration toggle
 - 首页右上角新增震动按钮；战斗暂停菜单里也可以开关。关闭后整个游戏都不再震动
   New vibration button on the home screen and in the battle pause menu
