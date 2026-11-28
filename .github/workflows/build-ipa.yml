@@ -88,7 +88,7 @@ jobs:
         run: |
           BEFORE="${{ github.event.before }}"
           {
-            echo "## Moon Action $APP_VERSION（build $APP_BUILD）"
+            echo "## Moon Action ${APP_VERSION}（build ${APP_BUILD}）"
             echo
             echo "### 更新说明"
             if [ -f RELEASE_NOTES.md ]; then grep -v '^<!--' RELEASE_NOTES.md; else echo "- 常规更新"; fi
@@ -104,9 +104,9 @@ jobs:
             echo "---"
             echo "**安装**：未签名 IPA，请用 AltStore、Sideloadly 或 TrollStore（支持的设备）重新签名后安装。需要 iOS 16 及以上，竖屏。"
             echo
-            echo "版本号 $APP_VERSION / build $APP_BUILD 已从构建出的 Info.plist 校验 · commit ${GITHUB_SHA}"
-          } > release_notes.md
-          cat release_notes.md
+            echo "版本号 ${APP_VERSION} / build ${APP_BUILD} 已从构建出的 Info.plist 校验 · commit ${GITHUB_SHA}"
+          } > "$RUNNER_TEMP/release_body.md"
+          cat "$RUNNER_TEMP/release_body.md"
 
       - name: Publish GitHub Release
         id: publish
@@ -117,7 +117,7 @@ jobs:
           name: Moon Action ${{ env.APP_VERSION }} · unsigned IPA
           target_commitish: ${{ github.sha }}
           files: ${{ env.IPA_NAME }}
-          body_path: release_notes.md
+          body_path: ${{ runner.temp }}/release_body.md
 
       # The CI token may not create a tag on a commit that adds workflow files (403); publish anyway.
       - name: Publish GitHub Release (fallback)
@@ -127,7 +127,7 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}
           name: Moon Action ${{ env.APP_VERSION }} · unsigned IPA
           files: ${{ env.IPA_NAME }}
-          body_path: release_notes.md
+          body_path: ${{ runner.temp }}/release_body.md
 
       - name: Build for simulator
         run: |
@@ -225,7 +225,8 @@ jobs:
           if-no-files-found: ignore
 
       - name: Attach screenshots to release
-        if: always()
+        # Only when an IPA was published — never create an empty release for a failed build.
+        if: always() && env.IPA_NAME != ''
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:

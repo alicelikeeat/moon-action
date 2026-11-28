@@ -117,7 +117,9 @@ final class BattleCameraController {
             let a = s == 0 ? p : e
             let fw = s == 0 ? f : -f
             let side = s == 0 ? right : -right
-            let orbit = Float(min(1, (c.now - closeUpStart) / 0.9)) * (.pi / 6)
+            // Start 40° off the facing axis so the opponent (often right in front at close range) never blocks the shot,
+            // then orbit a further 30°.
+            let orbit = Float.pi * 40 / 180 + Float(min(1, (c.now - closeUpStart) / 0.9)) * (.pi / 6)
             let dir = fw * cos(orbit) + side * sin(orbit)
             return (a + dir * 2.4 + SIMD3(0, 0.75, 0), c.closeUpChest + SIMD3(0, 0.35, 0), FOV.closeUp)
         }
