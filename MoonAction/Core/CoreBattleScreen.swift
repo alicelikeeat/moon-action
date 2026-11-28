@@ -56,8 +56,26 @@ final class CoreBattleScreen: Screen {
         self.difficulty = difficulty
         ai = AIController(side: 1, difficulty: difficulty)
         autoAI = AIController(side: 0, difficulty: .standard)
+        progression = false
         super.init()
     }
+
+    /// Battle from the progression save: levels, stars, Z abilities, leader bonuses and equipment apply.
+    init(playerLoadouts: [FighterLoadout], enemyLoadouts: [FighterLoadout], difficulty: Difficulty, seed: UInt64, progression: Bool) {
+        let p = playerLoadouts.isEmpty ? [FighterLoadout(def: FighterRoster.sera)] : playerLoadouts
+        let e = enemyLoadouts.isEmpty ? [FighterLoadout(def: FighterRoster.nova)] : enemyLoadouts
+        engine = BattleEngine(player: p, enemy: e, startZone: .mid, seed: seed)
+        self.difficulty = difficulty
+        ai = AIController(side: 1, difficulty: difficulty)
+        autoAI = AIController(side: 0, difficulty: .standard)
+        self.progression = progression
+        super.init()
+    }
+
+    private let progression: Bool
+    private var legendary = false
+    /// UL intro: real seconds left of the 2.5 s entrance (engine frozen meanwhile).
+    private var introLeft: Double = 0
 
     // MARK: - Build
 
@@ -159,7 +177,8 @@ final class CoreBattleScreen: Screen {
                                                                 object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.setPaused(true) }
         }
-        banner(L10n.isZH ? "中距离开局" : "MID RANGE", size: 16)
+        startIntroIfUL()
+        if introLeft <= 0 { banner(L10n.isZH ? "中距离开局" : "MID RANGE", size: 16) }
     }
 
     private func addHUD<V: View>(_ view: V, top: Bool) {
@@ -216,6 +235,11 @@ final class CoreBattleScreen: Screen {
     override func update(dt: Double) {
         if hud.paused { return }
         realTime += dt
+        if introLeft > 0 {
+            introLeft -= dt
+            updateIntro(dt: dt)
+            return
+        }
         if hitStop > 0 {
             hitStop -= dt
             setRates(0)
@@ -636,8 +660,39 @@ final class CoreBattleScreen: Screen {
         return f
     }()
 
+    /// UL entrance: 2.5 s orbit around the lead with an aura burst before the fight starts.
+    private func startIntroIfUL() {
+        guard engine.sides[0].current.def.rarity == .ul, Demo.mode != "core" else { return }
+        introLeft = 2.5
+        let m = model(0)
+        m.setAura(3)
+        m.play(Moves.charge)
+        banner("ULTRA · " + CoreVisuals.name(engine.sides[0].current.def), size: 24, color: UIColor(hex: 0xF27BFF))
+        Sound.play(.charge)
+        if Haptics.enabled { Haptics.heavy.impactOccurred() }
+        realDelay(1.4) { [weak self] in
+            guard let self else { return }
+            VFX.explosion(at: m.chestWorld, color: UIColor(hex: 0xF27BFF), in: self.fx)
+            self.cam.shake = max(self.cam.shake, 0.12)
+        }
+        realDelay(2.5) { m.setAura(0); m.stance() }
+    }
+
+    private func updateIntro(dt: Double) {
+        let t = Float(2.5 - introLeft) / 2.5
+        let p = worldPos(0)
+        let a = Float.pi * (1.1 - 1.3 * t)
+        let r: Float = 3.2 - 1.0 * t
+        arena.camera.simdPosition = p + SIMD3(sin(a) * r, 0.7 + 1.0 * t, cos(a) * r)
+        arena.camera.simdLook(at: p + SIMD3(0, 1.2, 0), up: SIMD3(0, 1, 0), localFront: SIMD3(0, 0, -1))
+        arena.camera.camera?.fieldOfView = 40
+        placeModels(dt: Float(dt))
+        if introLeft <= 0 { snapCamera() }
+    }
+
     /// LL / UL ultimate KO on the last opponent: slow motion, gold flash and the LEGENDARY FINISH badge.
     private func legendaryFinish(_ s: Int) {
+        if s == 0 { legendary = true }
         slowUntil = realTime + 2.2
         hitStop = max(hitStop, 0.35)
         cam.shake = max(cam.shake, 0.3)
@@ -825,6 +880,11 @@ final class CoreBattleScreen: Screen {
                size: 40, color: won ? Theme.accent : Theme.hpEnemy)
         if won { model(0).victory() }
         let ids = visuals[0].map(\.id)
+        if progression {
+            let lf = legendary, dmg = Int(engine.sides[0].damageDealt)
+            realDelay(lf ? 3.4 : 2.6) { [weak self] in self?.go(CoreResultScreen(won: won, legendary: lf, damage: dmg)) }
+            return
+        }
         realDelay(2.6) { [weak self] in self?.go(ResultScreen(won: won, teamIDs: ids, stage: Save.shared.data.stage)) }
     }
 

@@ -1,3 +1,9 @@
+## v2 阶段 4 · Phase 4 — 演出与养成闭环 / Cinematics & progression loop
+- 主能力：按角色解锁时间（15–25 秒）发动，抽究极技并附带回血/回气/清增益/全手牌转射击等效果 / Main abilities draw the ultimate
+- UL 开场 2.5 秒环绕运镜与气场爆发；LL/UL 究极技击倒最后一人触发 LEGENDARY FINISH / UL intro and Legendary Finish
+- 主页「出战」进入新养成中心：编队（队长 + 3 人、难度）、角色（升级/升星/3 槽装备、UL 陀螺仪立绘）、装备洗练（安全升级）/ New progression hub
+- 存档保存为 UserSaveData.json；战斗按等级/星级/Z 能力/装备计算面板，胜利掉落经验书、星魂、洗练石与装备 / JSON save + rewards
+
 ## v2 阶段 2 · Phase 2 — 3D 镜头、冲刺与受击 / Camera, dashes, hitstun
 - 新镜头控制器：弹簧阻尼平滑；越肩 48° / 前冲广角 56° + 速度线 / 瞬移 120° 反打切镜 / 必杀仰拍特写 38° / Spring-damped camera with dash, vanish-cut and close-up shots
 - 受击分级：轻受击 0.30s、连击受击 0.47s、重击飞 0.67s + 空中受身；霸体白闪；眩晕与麻痹 / Light, combo, heavy hitstun with air recovery; armor flash; stun & paralysis
