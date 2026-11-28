@@ -85,7 +85,7 @@ final class EngineStateTests: XCTestCase {
         XCTAssertFalse(e.apply(.chargeBegin, side: 0))
         let ki = e.sides[0].ki
         run(&e, 0.3)
-        XCTAssertEqual(e.sides[0].ki, ki, "no Ki regen while stunned")
+        XCTAssertEqual(e.sides[0].ki, ki + Tune.kiRegen * 0.3, accuracy: 0.2, "Ki keeps recovering while stunned")
         run(&e, 0.3)
         XCTAssertEqual(e.sides[0].current.phase, .idle)
         XCTAssertTrue(e.apply(.chargeBegin, side: 0))

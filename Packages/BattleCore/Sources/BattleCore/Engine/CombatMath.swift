@@ -4,7 +4,7 @@ public enum Tune {
     public static let maxFrameDT = 1.0 / 30.0     // clamp per rendered frame (no time jumps)
     public static let battleTime = 180.0
     public static let kiMax = 100.0
-    public static let kiRegen = 4.0               // per second while idle / moving
+    public static let kiRegen = 8.0               // per second, always (except KO)
     public static let chargeRate = 32.0           // per second while holding
     public static let vanishMax = 100.0
     public static let vanishRegen = 6.0

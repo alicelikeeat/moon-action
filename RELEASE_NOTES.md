@@ -7,6 +7,12 @@
 - **特殊援护 Special cover**：凯（打击援护）/艾格（射击援护）在对应招式打来时换上，会把对手直接击退到远距离（每套连招一次）
 - 岚离场时为队友 +25 气力；AI 血量低于 35% 也会换人
 
+### 气力与视角 · Ki & camera
+- **气力一直自动恢复**（每秒 8 点，被打、出招时也恢复）；长按聚气每秒 32 点
+  **Ki now recovers all the time** (8/s, also while attacking or being hit); holding to charge gives 32/s
+- **视角更接近龙珠激战传说**：画面上的距离压缩一半，双方都更大；镜头在角色背后 2.2 米、偏左、胸口高度，视野收窄
+  **Camera closer to DBL**: on-screen distance halved so both fighters look bigger; camera 2.2 m behind, slightly left, chest height, narrower FOV
+
 ### 修复 · Fixes
 - **v3.1.49 / v3.1.50 是坏包，请不要安装**（编译失败但仍被打包）。本版修复了编译错误，并加强了发布检查：只有完整编译成功、可执行文件存在时才会发布
   **v3.1.49 / v3.1.50 were broken builds — please don't install them.** Fixed, and releases now require a successful build

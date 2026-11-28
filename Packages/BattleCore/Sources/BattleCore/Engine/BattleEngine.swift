@@ -208,10 +208,11 @@ public struct BattleEngine: Sendable {
                 }
             default: break
             }
+            // Ki recovers all the time (DBL-style); holding to charge is much faster.
             switch f.phase {
             case .charging: side.ki = min(Tune.kiMax, side.ki + Tune.chargeRate * dt)
-            case .idle, .moving: side.ki = min(Tune.kiMax, side.ki + Tune.kiRegen * dt)
-            default: break
+            case .ko: break
+            default: side.ki = min(Tune.kiMax, side.ki + Tune.kiRegen * dt)
             }
             if !f.isKO { f.vanish = min(Tune.vanishMax, f.vanish + Tune.vanishRegen * dt) }
             side.current = f

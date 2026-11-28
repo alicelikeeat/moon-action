@@ -67,6 +67,7 @@ final class CoreBattleScreen: Screen {
         scene = arena.scene
         pointOfView = arena.camera
         if let cam = arena.camera.camera {
+            cam.fieldOfView = 50
             cam.bloomIntensity = 0.25
             cam.bloomThreshold = 1.2
             cam.bloomBlurRadius = 5
@@ -626,8 +627,11 @@ final class CoreBattleScreen: Screen {
         }
     }
 
+    /// On-screen distance is compressed (DBL keeps both fighters large); rules use the real gap.
+    private var visualGap: Float { 1.6 + max(0, Float(engine.gap) - 1.6) * 0.5 }
+
     private func worldPos(_ s: Int) -> SIMD3<Float> {
-        let half = Float(engine.gap) / 2
+        let half = visualGap / 2
         return SIMD3(lateral[s], 0, s == 0 ? -half : half)
     }
 
@@ -652,7 +656,7 @@ final class CoreBattleScreen: Screen {
         f.y = 0
         f = simd_length(f) > 1e-3 ? simd_normalize(f) : SIMD3(0, 0, 1)
         let right = SIMD3<Float>(f.z, 0, -f.x) * -1
-        let gap = Float(engine.gap)
+        let gap = visualGap
         // Special / ultimate startup: front close-up of the attacker.
         for s in 0..<2 where engine.inCinematic {
             if let k = engine.sides[s].current.action?.kind, k == .special || k == .ultimate {
@@ -664,8 +668,8 @@ final class CoreBattleScreen: Screen {
         // DBL framing in neutral: behind the player, a little to the left, chest height — the player stands
         // large right of center with the opponent ahead. Combos switch to the 3/4 side view below.
         let mid = (p + e) / 2
-        var pos = p - f * (2.7 + gap * 0.08) - right * 1.15 + SIMD3(0, 1.8, 0)
-        var look = p + f * max(2.8, gap * 0.75) - right * 0.35 + SIMD3(0, 1.2, 0)
+        var pos = p - f * (2.2 + gap * 0.06) - right * 0.95 + SIMD3(0, 1.6, 0)
+        var look = p + f * max(2.4, gap * 0.8) - right * 0.25 + SIMD3(0, 1.2, 0)
         // Comboing: swing further to the side and close in on the exchange.
         pos = simd_mix(pos, mid - f * 1.0 + right * (3.0 + gap * 0.1) + SIMD3(0, 1.35, 0), SIMD3(repeating: comboW))
         look = simd_mix(look, mid + f * 0.3 + SIMD3(0, 1.2, 0), SIMD3(repeating: comboW))
