@@ -435,5 +435,6 @@ extension BattleEngine {
         }
         gaugeOnHitTaken(d, &events)
         events += damage(dmg, to: d)
+        checkLegendaryFinish(attacker: s, kind: kind, &events)
     }
 }

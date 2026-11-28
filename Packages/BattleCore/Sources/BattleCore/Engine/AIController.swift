@@ -90,6 +90,10 @@ public struct AIController: Sendable {
             return
         }
         let me = e.sides[side].current
+        if e.abilityReady(side: side), me.canAct, e.rng.chance(0.02) {
+            e.apply(.mainAbility, side: side, events: &events)
+            return
+        }
         // Unleash the Rising Rush on an opening.
         if e.canRush(side: side), e.sides[1 - side].current.phase == .stunned || e.rng.chance(0.002) {
             e.apply(.risingRush, side: side, events: &events)

@@ -60,6 +60,10 @@ final class CoreHUDModel: ObservableObject {
     enum RushMode: Equatable { case none, pick, guess, wait }
     @Published var rushMode: RushMode = .none
     var onRush: () -> Void = {}
+    var onAbility: () -> Void = {}
+    /// Main ability: seconds until unlock, -1 when used.
+    @Published var abilityIn = 0
+    @Published var abilityReady = false
 
     var onPlay: (Int) -> Void = { _ in }
     var onSwitch: (Int) -> Void = { _ in }
@@ -89,6 +93,8 @@ final class CoreHUDModel: ObservableObject {
         set(\.gauge, Int(p.current.gauge))
         set(\.overload, p.current.overload)
         set(\.canRush, e.canRush(side: 0))
+        set(\.abilityReady, e.abilityReady(side: 0))
+        set(\.abilityIn, p.current.abilityUsed ? -1 : Int(e.abilityCountdown(side: 0).rounded(.up)))
         if let c = e.clash {
             set(\.clashBar, c.scores[0] ?? c.bar(at: e.time))
             set(\.clashLocked, c.scores[0])
@@ -240,6 +246,20 @@ struct CoreBottomHUD: View {
                         .foregroundStyle(Color(red: 1, green: 0.48, blue: 0.44))
                 }
                 Spacer()
+                if m.abilityIn >= 0 {
+                    Button(action: m.onAbility) {
+                        VStack(spacing: 1) {
+                            Image(systemName: "star.circle.fill").font(.system(size: 20, weight: .bold))
+                            SwiftUI.Text(m.abilityReady ? (L10n.isZH ? "主能力" : "ABILITY") : "\(m.abilityIn)s")
+                                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                        }
+                        .frame(width: 54, height: 50)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(m.abilityReady ? Color(Theme.accent).opacity(0.9) : Color.black.opacity(0.45)))
+                        .foregroundStyle(m.abilityReady ? Color.black : Color.white.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!m.abilityReady)
+                }
             }
             if m.rushMode != .none {
                 SwiftUI.Text(rushPrompt).font(.system(size: 13, weight: .heavy)).foregroundStyle(Color(Theme.accent))

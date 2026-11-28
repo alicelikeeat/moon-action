@@ -93,6 +93,7 @@ final class CoreBattleScreen: Screen {
             self.input(.play(slot))
         }
         hud.onRush = { [weak self] in self?.input(.risingRush) }
+        hud.onAbility = { [weak self] in self?.input(.mainAbility) }
         hud.onSwitch = { [weak self] i in self?.input(.switchTo(i)) }
         hud.onHaptics = { [weak self] in
             Haptics.enabled.toggle()
@@ -599,6 +600,17 @@ final class CoreBattleScreen: Screen {
             cam.shake = max(cam.shake, 0.25)
             hitStop = max(hitStop, 0.2)
             if Haptics.enabled { Haptics.heavy.impactOccurred() }
+        case .mainAbility(let s):
+            let m = model(s)
+            m.setAura(3)
+            m.play(Moves.charge)
+            realDelay(1.0) { m.setAura(0) }
+            callout((s == 0 ? "" : (L10n.isZH ? "对手 · " : "Foe · ")) + (L10n.isZH ? "主能力发动！" : "MAIN ABILITY!"),
+                    color: Theme.accent, symbol: "star.circle.fill")
+            Sound.play(.charge)
+            if s == 0 { Haptics.medium.impactOccurred() }
+        case .legendaryFinish(let s):
+            legendaryFinish(s)
         case .comboRoute(let s, let route):
             guard s == 0 else { break }
             switch route {
@@ -623,6 +635,18 @@ final class CoreBattleScreen: Screen {
         f.numberStyle = .decimal
         return f
     }()
+
+    /// LL / UL ultimate KO on the last opponent: slow motion, gold flash and the LEGENDARY FINISH badge.
+    private func legendaryFinish(_ s: Int) {
+        slowUntil = realTime + 2.2
+        hitStop = max(hitStop, 0.35)
+        cam.shake = max(cam.shake, 0.3)
+        VFX.explosion(at: model(1 - s).chestWorld, color: Theme.accent, in: fx)
+        realDelay(0.5) { [weak self] in
+            self?.banner("LEGENDARY FINISH", size: 34, color: Theme.accent)
+        }
+        if Haptics.enabled { Haptics.heavy.impactOccurred() }
+    }
 
     // MARK: - Phase 2 juice
 

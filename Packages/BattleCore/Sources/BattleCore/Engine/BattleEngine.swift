@@ -110,6 +110,7 @@ public enum Input: Sendable, Equatable {
     case risingRush       // 7 orbs: unleash the rush
     case rushPick(Int)    // attacker: card the defender must guess
     case rushGuess(Int)   // defender: guess one of 4
+    case mainAbility      // once per fighter after its unlock time
     case switchTo(Int)    // team member index (tag switch / cover change while being hit)
 }
 
@@ -178,6 +179,9 @@ public enum BattleEvent: Sendable, Equatable {
     case rushGuessing(defender: Int, until: Double)
     case rushParried(side: Int)
     case rushFinish(side: Int)
+    case mainAbility(side: Int)
+    /// LL / UL ultimate KO'd the opponent's last fighter.
+    case legendaryFinish(side: Int)
 }
 
 /// Deterministic fixed-step battle simulation. Side 0 = player, side 1 = enemy.
@@ -341,6 +345,8 @@ public struct BattleEngine: Sendable {
             return false
         case .risingRush:
             return startRush(s, &events)
+        case .mainAbility:
+            return useAbility(s, &events)
         case .moveForward, .moveBack:
             let route = input == .moveForward && routeOpen(s)
             guard f.canAct || route else { return false }
