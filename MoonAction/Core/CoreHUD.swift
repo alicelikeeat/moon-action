@@ -24,6 +24,18 @@ final class CoreHUDModel: ObservableObject {
         var portraitID = ""
     }
 
+    struct BenchVM: Equatable, Identifiable {
+        let id: Int            // team index
+        let name: String
+        let element: BattleCore.Element
+        let hp: Double         // fraction
+        let ko: Bool
+        let image: UIImage?
+    }
+
+    @Published var bench: [BenchVM] = []
+    @Published var switchCooldown = 0
+    @Published var haptics = Haptics.enabled
     @Published var timer = 180
     @Published var player = FighterVM()
     @Published var enemy = FighterVM()
@@ -39,6 +51,8 @@ final class CoreHUDModel: ObservableObject {
     @Published var auto = false
 
     var onPlay: (Int) -> Void = { _ in }
+    var onSwitch: (Int) -> Void = { _ in }
+    var onHaptics: () -> Void = {}
     var onPause: () -> Void = {}
     var onResume: () -> Void = {}
     var onQuit: () -> Void = {}
@@ -61,6 +75,12 @@ final class CoreHUDModel: ObservableObject {
         set(\.zone, e.zone)
         set(\.orbs, p.orbs)
         set(\.locked, p.current.phase == .stunned)
+        set(\.switchCooldown, Int(e.switchCooldown(side: 0).rounded(.up)))
+        set(\.bench, p.team.indices.filter { $0 != p.active }.map { i in
+            let f = p.team[i]
+            return BenchVM(id: i, name: CoreVisuals.name(f.def), element: f.def.element, hp: max(0, f.hp) / f.def.maxHP, ko: f.isKO,
+                           image: Portraits.image(CoreVisuals.visual(f.def), .bust, size: CGSize(width: 56, height: 56)))
+        })
         let cards: [CardVM?] = (0..<4).map { i in
             guard let h = p.hand[i] else { return nil }
             return CardVM(id: h.id, slot: i, name: CoreVisuals.cardName(h.card), kind: h.card.kind,
@@ -182,9 +202,17 @@ struct CoreBottomHUD: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            if m.locked {
-                SwiftUI.Text(L10n.isZH ? "受击中" : "COMBO'D").font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color(red: 1, green: 0.48, blue: 0.44))
+            HStack(alignment: .bottom, spacing: 10) {
+                ForEach(m.bench) { b in
+                    BenchButton(vm: b, cooldown: m.switchCooldown, highlight: m.locked) { m.onSwitch(b.id) }
+                }
+                if m.locked {
+                    SwiftUI.Text(m.switchCooldown == 0 ? (L10n.isZH ? "受击中 · 点头像援护换人" : "COMBO'D · tap to cover")
+                                                       : (L10n.isZH ? "受击中" : "COMBO'D"))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color(red: 1, green: 0.48, blue: 0.44))
+                }
+                Spacer()
             }
             HStack(spacing: 8) {
                 ForEach(0..<4, id: \.self) { i in
@@ -214,6 +242,39 @@ struct CoreBottomHUD: View {
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 12)
+    }
+}
+
+/// Benched teammate: portrait with element ring, HP arc, cooldown overlay. Tap to tag in.
+private struct BenchButton: View {
+    let vm: CoreHUDModel.BenchVM
+    let cooldown: Int
+    let highlight: Bool
+    let tap: () -> Void
+
+    var body: some View {
+        Button(action: tap) {
+            ZStack {
+                Circle().fill(Color.black.opacity(0.5))
+                if let img = vm.image {
+                    Image(uiImage: img).resizable().scaledToFill().clipShape(Circle()).padding(3)
+                }
+                Circle().trim(from: 0, to: vm.hp).stroke(Color(red: 0.49, green: 0.89, blue: 0.66), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90)).padding(1.5)
+                Circle().stroke(Color(CoreVisuals.color(vm.element)).opacity(0.9), lineWidth: 1).padding(5)
+                if vm.ko {
+                    Circle().fill(Color.black.opacity(0.65))
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundStyle(.white.opacity(0.7))
+                } else if cooldown > 0 {
+                    Circle().fill(Color.black.opacity(0.55))
+                    SwiftUI.Text("\(cooldown)").font(.system(size: 16, weight: .heavy, design: .rounded))
+                }
+            }
+            .frame(width: 50, height: 50)
+            .overlay(Circle().stroke(Color(Theme.accent), lineWidth: highlight && cooldown == 0 && !vm.ko ? 2 : 0).padding(-3))
+        }
+        .buttonStyle(.plain)
+        .disabled(vm.ko || cooldown > 0)
     }
 }
 
@@ -284,6 +345,15 @@ struct CorePauseOverlay: View {
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .background(Capsule().fill(Color(Theme.accent))).foregroundStyle(.black)
                     }
+                    Button(action: m.onHaptics) {
+                        HStack {
+                            Image(systemName: m.haptics ? "iphone.radiowaves.left.and.right" : "iphone.slash")
+                            SwiftUI.Text(m.haptics ? (L10n.isZH ? "震动：开" : "Vibration: On") : (L10n.isZH ? "震动：关" : "Vibration: Off"))
+                        }
+                        .font(.system(size: 15, weight: .medium))
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                    }
+                    .glassBox(20)
                     Button(action: m.onQuit) {
                         SwiftUI.Text(L10n.isZH ? "退出战斗" : "Quit").font(.system(size: 15, weight: .medium))
                             .frame(maxWidth: .infinity, minHeight: 40)

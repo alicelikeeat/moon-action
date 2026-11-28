@@ -84,6 +84,12 @@ final class CoreBattleScreen: Screen {
         snapCamera()
 
         hud.onPlay = { [weak self] slot in self?.input(.play(slot)) }
+        hud.onSwitch = { [weak self] i in self?.input(.switchTo(i)) }
+        hud.onHaptics = { [weak self] in
+            Haptics.enabled.toggle()
+            self?.hud.haptics = Haptics.enabled
+            Haptics.select()
+        }
         hud.onPause = { [weak self] in self?.setPaused(true) }
         hud.onResume = { [weak self] in self?.setPaused(false) }
         hud.onQuit = { [weak self] in self?.go(HomeScreen()) }
@@ -464,6 +470,15 @@ final class CoreBattleScreen: Screen {
             popup(L10n.isZH ? "坚韧！" : "TENACITY!", over: s, color: Theme.accent, size: 20)
         case .switched(let s, let to):
             realDelay(1.0) { [weak self] in self?.showMember(s, to) }
+        case .tagged(let s, let to, let cover, let special):
+            showMember(s, to, cover: cover)
+            if cover {
+                callout(special ? (L10n.isZH ? "特殊援护！对手被击退 · SPECIAL COVER" : "SPECIAL COVER!")
+                                : (L10n.isZH ? "援护换人 · COVER CHANGE" : "COVER CHANGE"),
+                        color: special ? Theme.accent : Theme.energy, symbol: "person.2.fill")
+                if s == 0 { Haptics.medium.impactOccurred() }
+                if special { shake = max(shake, 0.12) }
+            }
         case .battleOver(let w):
             finish(winner: w)
         case .comboEnded(let s, let hits):
@@ -554,21 +569,30 @@ final class CoreBattleScreen: Screen {
         if let sig = currentSig[s] { Sound.play(sig.fire, pitch: sig.pitch) } else { Sound.play(.blast) }
     }
 
-    private func showMember(_ s: Int, _ i: Int) {
+    private func showMember(_ s: Int, _ i: Int, cover: Bool = false) {
         guard i != shown[s], i < models[s].count else { return }
         let old = models[s][shown[s]]
-        old.root.runAction(.sequence([.fadeOut(duration: 0.2), .removeFromParentNode(), .run { $0.opacity = 1 }]))
+        if !engine.sides[s].team[shown[s]].isKO { old.play(cover ? Moves.backflip : Moves.stepBack) }
+        old.root.runAction(.sequence([.wait(duration: 0.12), .fadeOut(duration: 0.22), .removeFromParentNode(), .run { $0.opacity = 1 }]))
         shown[s] = i
         let n = models[s][i]
         n.revive()
         arena.world.addChildNode(n.root)
-        n.play(Moves.tagDrop)
         seenAction[s] = -1
+        wasCharging[s] = false
         placeModels(dt: 1)
-        realDelay(0.2) { [weak self] in
-            guard let self else { return }
-            VFX.dust(at: n.root.simdWorldPosition + SIMD3(0, 0.1, 0), scale: 0.8, in: self.fx)
-            Sound.play(.thud, pitch: 1.1)
+        if cover {
+            // Cover change: cut in with an afterimage and block with crossed arms.
+            n.play(Moves.coverGuard)
+            n.afterimage(in: fx)
+            Sound.play(.slap, pitch: 0.8)
+        } else {
+            n.play(Moves.tagDrop)
+            realDelay(0.2) { [weak self] in
+                guard let self else { return }
+                VFX.dust(at: n.root.simdWorldPosition + SIMD3(0, 0.1, 0), scale: 0.8, in: self.fx)
+                Sound.play(.thud, pitch: 1.1)
+            }
         }
         banner(CoreVisuals.name(engine.sides[s].current.def), size: 18)
     }

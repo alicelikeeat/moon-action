@@ -65,7 +65,16 @@ final class HomeScreen: Screen {
             sound?.configuration?.image = UIImage(systemName: Save.shared.data.soundOn ? "speaker.wave.2.fill" : "speaker.slash.fill",
                                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold))
         }, for: .touchUpInside)
-        for v in [record, coins, lang, sound] as [UIView] { ui.addSubview(v) }
+        // Vibration on / off (all haptics in the app respect it).
+        let vibeIcon = { Haptics.enabled ? "iphone.radiowaves.left.and.right" : "iphone.slash" }
+        let vibe = Glass.button(symbol: vibeIcon(), style: .secondary, fontSize: 13)
+        vibe.accessibilityLabel = L10n.isZH ? "震动" : "Vibration"
+        vibe.addAction(UIAction { [weak vibe] _ in
+            Haptics.enabled.toggle()
+            Haptics.select()
+            vibe?.configuration?.image = UIImage(systemName: vibeIcon(), withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold))
+        }, for: .touchUpInside)
+        for v in [record, coins, lang, sound, vibe] as [UIView] { ui.addSubview(v) }
 
         // Title: quiet, wide-tracked typography
         let title = UILabel()
@@ -130,7 +139,11 @@ final class HomeScreen: Screen {
             sound.centerYAnchor.constraint(equalTo: record.centerYAnchor),
             sound.widthAnchor.constraint(equalToConstant: 36),
             sound.heightAnchor.constraint(equalToConstant: 36),
-            lang.trailingAnchor.constraint(equalTo: sound.leadingAnchor, constant: -8),
+            vibe.trailingAnchor.constraint(equalTo: sound.leadingAnchor, constant: -8),
+            vibe.centerYAnchor.constraint(equalTo: sound.centerYAnchor),
+            vibe.widthAnchor.constraint(equalToConstant: 36),
+            vibe.heightAnchor.constraint(equalToConstant: 36),
+            lang.trailingAnchor.constraint(equalTo: vibe.leadingAnchor, constant: -8),
             lang.centerYAnchor.constraint(equalTo: record.centerYAnchor),
             lang.heightAnchor.constraint(equalToConstant: 36),
             coins.leadingAnchor.constraint(equalTo: record.trailingAnchor, constant: 8),
