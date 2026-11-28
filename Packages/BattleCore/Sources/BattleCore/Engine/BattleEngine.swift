@@ -74,6 +74,9 @@ public struct SideState: Sendable {
     public internal(set) var teamDamageUntil: Double = 0
     public func teamDamageBonus(at t: Double) -> Double { t < teamDamageUntil ? teamDamageUp : 0 }
 
+    /// Input buffer / combo routes.
+    public internal(set) var combo = ComboTracker()
+
     /// A special cover change was used during the opponent's current combo.
     public internal(set) var specialCoverUsed = false
 
@@ -149,6 +152,10 @@ public enum BattleEvent: Sendable, Equatable {
     case stunApplied(side: Int, duration: Double)
     case paralyzed(side: Int, duration: Double)
     case paralysisJolt(side: Int)
+    /// Combo tracker.
+    case inputBuffered(side: Int, slot: Int)
+    case comboRoute(side: Int, route: ComboRoute)
+    case comboDropped(side: Int)
 }
 
 /// Deterministic fixed-step battle simulation. Side 0 = player, side 1 = enemy.
@@ -231,6 +238,7 @@ public struct BattleEngine: Sendable {
             events.append(.zoneChanged(z))
         }
         stepActions(&events)
+        stepCombos(&events)
         stepShots(&events)
         stepWarnings(&events)
         for s in 0..<2 {
@@ -269,6 +277,7 @@ public struct BattleEngine: Sendable {
             if d.phase != .stunned && d.phase != .ko {
                 events.append(.comboEnded(side: s, hits: sides[s].comboHits))
                 sides[1 - s].specialCoverUsed = false
+                sides[s].combo.reset()
                 sides[s].comboCards = 0
                 sides[s].comboHits = 0
             }
@@ -290,7 +299,12 @@ public struct BattleEngine: Sendable {
         var f = sides[s].current
         switch input {
         case .moveForward, .moveBack:
-            guard f.canAct else { return false }
+            let route = input == .moveForward && routeOpen(s)
+            guard f.canAct || route else { return false }
+            if route {
+                noteRouteStep(s, .dash)
+                f.action = nil
+            }
             let target: Double
             if input == .moveForward {
                 target = zone == .close ? Tune.dashGap : (Tune.zoneGap[zone.closer] ?? gap)
@@ -307,17 +321,27 @@ public struct BattleEngine: Sendable {
             f.pendingRecovery = forward ? 0 : Tune.backDashRecovery
             events.append(.stepped(side: s, forward: forward, duration: travel))
         case .chargeBegin:
-            guard f.phase == .idle || f.phase == .moving else { return false }
+            let route = routeOpen(s)
+            guard f.phase == .idle || f.phase == .moving || route else { return false }
+            if route {
+                sides[s].combo.chargeStart = time
+                f.action = nil
+            }
             f.phase = .charging
         case .chargeEnd:
             guard f.phase == .charging else { return false }
+            if let start = sides[s].combo.chargeStart {
+                sides[s].combo.chargeHeld = time - start
+                sides[s].combo.chargeStart = nil
+                sides[s].combo.steps.append(.charge)
+            }
             f.phase = .idle
         case .sidestep(let dir):
             return sidestep(s, dir: dir, &events)
         case .tap:
             return basicAttack(s, &events)
         case .play(let slot):
-            return playCard(s, slot: slot, &events)
+            return playCard(s, slot: slot, &events) || bufferCard(s, slot: slot, &events)
         case .switchTo(let i):
             return switchFighter(s, to: i, &events)
         }

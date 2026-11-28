@@ -513,6 +513,20 @@ final class CoreBattleScreen: Screen {
             m.react(.head, heavy: false)
             VFX.impact(at: m.chestWorld, color: UIColor(hex: 0xF2E15C), heavy: false, in: fx, dir: SIMD3(0, 1, 0), scale: 0.6)
             Sound.play(.crack, pitch: 1.6)
+        case .comboRoute(let s, let route):
+            guard s == 0 else { break }
+            switch route {
+            case .sideStep:
+                callout(L10n.isZH ? "侧滑连 · +8 气 · 闪避+10%" : "SIDE-STEP COMBO · +8 KI", color: Theme.energy, symbol: "arrow.left.and.right")
+            case .chargeStep:
+                callout(L10n.isZH ? "聚气连 · +15 气" : "CHARGE-STEP COMBO · +15 KI", color: Theme.accent, symbol: "bolt.fill")
+            }
+            Sound.play(.ui, pitch: 1.5)
+            Haptics.light.impactOccurred()
+        case .comboDropped(let s):
+            popup(L10n.isZH ? "连击中断" : "COMBO DROPPED", over: 1 - s, color: Theme.text2, size: 16)
+        case .inputBuffered:
+            if Haptics.enabled { Haptics.light.impactOccurred(intensity: 0.4) }
         case .zoneChanged, .handChanged, .swing:
             break
         }

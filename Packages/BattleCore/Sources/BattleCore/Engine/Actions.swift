@@ -160,6 +160,7 @@ extension BattleEngine {
         f.phase = .acting
         f.phaseUntil = f.action?.end ?? time
         sides[s].current = f
+        resolveRoute(s, card: card, action: f.action, &events)
         // Chaining keeps the defender locked through the new card's startup.
         if sides[d].current.phase == .stunned, let first = f.action?.times.first {
             let impact = card.kind == .blast ? first + gap / Self.shotSpeed : first
@@ -249,6 +250,17 @@ extension BattleEngine {
 
     mutating func sidestep(_ s: Int, dir: Int, _ events: inout [BattleEvent]) -> Bool {
         var f = sides[s].current
+        if routeOpen(s) {
+            // Side-step combo route: arc around the stunned opponent (no vanish needed).
+            noteRouteStep(s, .side)
+            f.action = nil
+            f.phase = .moving
+            f.pendingRecovery = 0
+            f.phaseUntil = time + 0.12
+            sides[s].current = f
+            events.append(.sidestep(side: s, dir: dir))
+            return true
+        }
         guard f.canAct else { return false }
         if let lead = incomingThreat(on: s), lead <= Tune.warningWindow.upperBound, f.vanish >= Tune.vanishCost {
             // Vanishing step: blink behind the attack, the attacker whiffs and is left open.
