@@ -587,6 +587,19 @@ final class FighterModel {
         return c
     }
 
+    /// Play a shot clip; the basic one-hand shot alternates hands on repeats.
+    @discardableResult
+    func shoot(_ clip: Clip, speed: Double = 1) -> Clip {
+        if clip.name == "shotR" || clip.name == "shotL" {
+            shotSide += 1
+            let c = shotSide % 2 == 1 ? Moves.shotR : Moves.shotL
+            animator.play(c, speed: speed)
+            return c
+        }
+        animator.play(clip, speed: speed)
+        return clip
+    }
+
     func stepBack() { animator.play(Moves.stepBack) }
     func sidestep(_ dir: Float) { animator.play(Moves.sidestep(dir)) }
     func charge() { animator.play(Moves.charge) }

@@ -3,6 +3,7 @@ import AVFoundation
 /// All sound effects are synthesized at launch — no audio assets ship with the game.
 enum SFX: CaseIterable {
     case hit, heavy, blast, beam, dodge, card, ko, charge, ui, explode, ultimate
+    case whoosh, crack, thud, slap, zap, boom
 }
 
 @MainActor
@@ -19,6 +20,7 @@ final class Sound {
             for _ in 0..<3 {
                 if let p = try? AVAudioPlayer(data: data) {
                     p.volume = Sound.volume(s)
+                    p.enableRate = true
                     p.prepareToPlay()
                     players.append(p)
                 }
@@ -27,13 +29,15 @@ final class Sound {
         }
     }
 
-    static func play(_ s: SFX) { shared.play(s) }
+    static func play(_ s: SFX, pitch: Float = 1) { shared.play(s, pitch: pitch) }
 
-    func play(_ s: SFX) {
+    /// `pitch` (0.5…2) shifts pitch and speed together; per-card signatures use it for their own voice.
+    func play(_ s: SFX, pitch: Float = 1) {
         guard enabled, let players = pools[s], !players.isEmpty else { return }
         let i = (cursor[s] ?? 0) % players.count
         cursor[s] = i + 1
         let p = players[i]
+        p.rate = max(0.5, min(2, pitch))
         p.currentTime = 0
         p.play()
     }
@@ -43,6 +47,7 @@ final class Sound {
     private static func volume(_ s: SFX) -> Float {
         switch s {
         case .ui, .card: return 0.35
+        case .whoosh: return 0.28
         case .charge: return 0.3
         case .beam, .ultimate, .explode: return 0.55
         default: return 0.45
@@ -91,6 +96,23 @@ final class Sound {
             return gen(0.5) { t, p in (chirp(t, 120, 520, 0.5) * 0.4 + noise() * 0.15) * sin(Double.pi * p) }
         case .explode:
             return gen(0.9) { t, p in (noise() * 0.8 + sin(2 * Double.pi * 55 * t) * 0.6) * pow(1 - p, 2) }
+        case .whoosh:
+            // Air swing: band of noise rising then falling.
+            return gen(0.16) { t, p in noise() * 0.5 * sin(Double.pi * p) * (0.6 + 0.4 * sin(2 * Double.pi * (300 + 900 * p) * t)) }
+        case .crack:
+            // Sharp knuckle snap.
+            return gen(0.09) { t, p in (noise() * 0.8 + sin(2 * Double.pi * 1800 * t) * 0.3) * pow(1 - p, 5) }
+        case .thud:
+            // Deep body blow.
+            return gen(0.22) { t, p in (sin(2 * Double.pi * (90 - 40 * p) * t) * 1.0 + noise() * 0.25) * pow(1 - p, 2.5) }
+        case .slap:
+            return gen(0.1) { t, p in (noise() * 0.7 + chirp(t, 600, 250, 0.1) * 0.4) * pow(1 - p, 3.5) }
+        case .zap:
+            // Electric energy shot.
+            return gen(0.25) { t, p in (sin(2 * Double.pi * 1400 * t) * (sin(2 * Double.pi * 60 * t) > 0 ? 0.5 : -0.5) + noise() * 0.2) * pow(1 - p, 1.8) }
+        case .boom:
+            // Heavy energy cannon.
+            return gen(0.45) { t, p in (chirp(t, 260, 50, 0.45) * 0.8 + noise() * 0.45) * pow(1 - p, 1.4) }
         case .ultimate:
             return gen(1.0) { t, p in
                 (sin(2 * Double.pi * 220 * t) * 0.3 + sin(2 * Double.pi * 330 * t) * 0.25 + sin(2 * Double.pi * 440 * t) * 0.2)

@@ -167,7 +167,7 @@ final class HomeScreen: Screen {
                 ("rectangle.portrait.on.rectangle.portrait", "help.1"), ("figure.boxing", "help.2"),
                 ("dot.radiowaves.right", "help.3"), ("sparkles", "help.4"), ("cross", "help.5"), ("flame", "help.6"),
                 ("link", "help.7"), ("wind", "help.8"), ("hand.tap", "help.9"), ("moon", "help.10"),
-                ("circle.hexagongrid.fill", "help.11"), ("sparkles", "help.12"),
+                ("circle.hexagongrid.fill", "help.11"), ("sparkles", "help.12"), ("lock.fill", "help.13"),
             ]
             for (sym, key) in items {
                 let icon = UIImageView(image: UIImage(systemName: sym, withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .medium))

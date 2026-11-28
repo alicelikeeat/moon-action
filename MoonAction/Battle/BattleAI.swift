@@ -22,6 +22,15 @@ extension BattleScreen {
             return
         }
         if s.charging && (now >= aiChargeUntil[id] ?? 0 || s.energy >= 95) { s.charging = false }
+
+        // Locked in the opponent's combo: the only way out is switching fighters.
+        if inHitstun(s) {
+            if now >= s.swapReadyAt, c.hp < c.maxHP * 0.6, now - o.lastHitTime < 0.5, roll(0.012),
+               let i = s.team.indices.first(where: { $0 != s.active && !s.team[$0].isKO }) {
+                swap(s, to: i, forced: false)
+            }
+            return
+        }
         guard now >= aiNext[id] ?? 0 else { return }
 
         // Relay chase uses exactly the same eligibility checks and costs as the player.

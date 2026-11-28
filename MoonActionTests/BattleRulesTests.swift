@@ -33,64 +33,83 @@ final class BattleRulesTests: XCTestCase {
         XCTAssertEqual(b.enemy.counterUntil, 0)
     }
 
-    /// In hitstun the escape costs double. Just below the double cost → the hit lands normally.
-    func testAIEscapeBelowDoubleCostTakesTheHit() {
+    // MARK: Hit-lock (DBL rule): no vanish while being hit; switching breaks out
+
+    /// AI in hitstun cannot vanish even with a full gauge: the hit lands, nothing is deducted.
+    func testAINoVanishWhileInHitstun() {
         let b = makeBattle()
         let t = b.enemy.current
         t.stunUntil = b.now + 1
         let hp = t.hp
-        let gauge = Tune.dodgeCost * 2 - 0.01
-        b.enemy.dodge = gauge
+        b.enemy.dodge = Tune.dodgeMax
         rolls = [true, true, true]
         let hit = b.applyHit(from: b.player, power: 1, stun: 0.4, knock: 1, heavy: false, aiDodge: 1)
         XCTAssertTrue(hit)
         XCTAssertLessThan(t.hp, hp)
-        XCTAssertEqual(b.enemy.dodge, gauge, accuracy: 0.0001)     // nothing deducted
-        XCTAssertEqual(b.enemy.counterUntil, 0)                     // no perfect-evade reward
-        XCTAssertGreaterThan(t.stunUntil, b.now)                    // hit reaction applied
+        XCTAssertEqual(b.enemy.dodge, Tune.dodgeMax, accuracy: 0.0001)
+        XCTAssertEqual(b.enemy.counterUntil, 0)
         XCTAssertEqual(b.player.comboCount, 1)
     }
 
-    /// In hitstun with exactly the double cost → escape succeeds, double cost deducted once.
-    func testAIEscapeExactDoubleCostSucceeds() {
-        let b = makeBattle()
-        let t = b.enemy.current
-        t.stunUntil = b.now + 1
-        let hp = t.hp
-        b.enemy.dodge = Tune.dodgeCost * 2
-        rolls = [true, true, false]
-        let hit = b.applyHit(from: b.player, power: 1, stun: 0.4, knock: 1, heavy: false, aiDodge: 1)
-        XCTAssertFalse(hit)
-        XCTAssertEqual(t.hp, hp)
-        XCTAssertEqual(b.enemy.dodge, 0, accuracy: 0.0001)
-        XCTAssertEqual(b.player.comboCount, 0)
-    }
-
-    /// Player AUTO follows the same real-cost rules.
-    func testAutoPlayerEscapeBelowDoubleCostTakesTheHit() {
+    /// AUTO player follows the same rule.
+    func testAutoPlayerNoVanishWhileInHitstun() {
         let b = makeBattle()
         b.player.auto = true
         let t = b.player.current
         t.stunUntil = b.now + 1
         let hp = t.hp
-        b.player.dodge = Tune.dodgeCost * 2 - 0.01
+        b.player.dodge = Tune.dodgeMax
         rolls = [true, true, true]
         XCTAssertTrue(b.applyHit(from: b.enemy, power: 1, stun: 0.4, knock: 1, heavy: false, aiDodge: 1))
         XCTAssertLessThan(t.hp, hp)
-        XCTAssertEqual(b.player.counterUntil, 0)
+        XCTAssertEqual(b.player.dodge, Tune.dodgeMax, accuracy: 0.0001)
     }
 
-    func testAutoPlayerEscapeExactDoubleCostSucceeds() {
+    /// Manual vanish is refused while being hit and changes nothing.
+    func testManualVanishRefusedWhileInHitstun() {
         let b = makeBattle()
-        b.player.auto = true
-        let t = b.player.current
-        t.stunUntil = b.now + 1
-        let hp = t.hp
-        b.player.dodge = Tune.dodgeCost * 2
-        rolls = [true, true, false]
-        XCTAssertFalse(b.applyHit(from: b.enemy, power: 1, stun: 0.4, knock: 1, heavy: false, aiDodge: 1))
-        XCTAssertEqual(t.hp, hp)
-        XCTAssertEqual(b.player.dodge, 0, accuracy: 0.0001)
+        let c = b.player.current
+        c.stunUntil = b.now + 1
+        b.player.dodge = Tune.dodgeMax
+        let pos = c.pos
+        XCTAssertFalse(b.dodge(b.player, lateral: 1))
+        XCTAssertEqual(b.player.dodge, Tune.dodgeMax, accuracy: 0.0001)
+        XCTAssertEqual(c.pos, pos)
+        XCTAssertFalse(b.playCard(b.player, 0))
+    }
+
+    /// The defender stays locked through the attacker's chain window after a card lands.
+    func testCardLandingExtendsLockThroughChainWindow() {
+        let b = makeBattle()
+        XCTAssertTrue(b.applyHit(from: b.enemy, power: 0.1, stun: 0.4, knock: 1, heavy: false, aiDodge: 0))
+        b.enemy.chainOpenUntil = b.now + 0.55
+        b.extendLock(b.enemy)
+        XCTAssertGreaterThanOrEqual(b.player.current.stunUntil, b.enemy.chainOpenUntil)
+        XCTAssertTrue(b.inHitstun(b.player))
+    }
+
+    /// Switching fighters breaks out of a combo and interrupts the attacker.
+    func testSwitchBreaksOutOfCombo() {
+        let b = makeBattle()
+        XCTAssertTrue(b.applyHit(from: b.enemy, power: 0.1, stun: 1.0, knock: 1, heavy: false, aiDodge: 0))
+        b.enemy.current.busy = true
+        b.enemy.chainOpenUntil = b.now + 0.5
+        b.player.swapReadyAt = 0
+        XCTAssertTrue(b.swap(b.player, to: 1, forced: false))
+        XCTAssertEqual(b.player.active, 1)
+        XCTAssertFalse(b.enemy.current.busy)
+        XCTAssertEqual(b.enemy.chainOpenUntil, 0)
+        XCTAssertGreaterThan(b.player.current.invulnUntil, b.now)
+        XCTAssertFalse(b.inHitstun(b.player))
+    }
+
+    /// Switch is still bound by its cooldown while locked.
+    func testSwitchOutOfComboRespectsCooldown() {
+        let b = makeBattle()
+        XCTAssertTrue(b.applyHit(from: b.enemy, power: 0.1, stun: 1.0, knock: 1, heavy: false, aiDodge: 0))
+        b.player.swapReadyAt = b.now + 3
+        XCTAssertFalse(b.swap(b.player, to: 1, forced: false))
+        XCTAssertEqual(b.player.active, 0)
     }
 
     func testInvulnerabilityCheckIsIndependent() {

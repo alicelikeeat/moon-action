@@ -66,7 +66,7 @@ final class TeamScreen: Screen {
         infoSpeed.text = d.speed.label
         infoStats.numberOfLines = 2
         infoStats.text = L10n.f("team.stats", Int(d.hp), Int(d.atk), Int(d.defense)) + "\n"
-            + L10n.f("team.elementAbility", d.element.name, d.ability.name)
+            + L10n.f("team.elementAbility", d.element.name, d.ability.name) + " · " + FightStyle.of(d).name
         deckRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for card in d.cards + [d.specialCard, d.effectCard, d.ultimateCard] {
             let iv = UIImageView(image: CardArt.image(card))

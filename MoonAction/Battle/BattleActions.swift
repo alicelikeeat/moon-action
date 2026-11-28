@@ -42,6 +42,9 @@ extension BattleScreen {
             timeline.cancel(tag: s.current)
             s.current.busy = false
             s.chain += 1
+            // A chained card keeps the defender locked through its startup (dash-in / wind-up).
+            let t = opponent(of: s).current
+            if now < t.stunUntil { t.stunUntil = max(t.stunUntil, now + 0.6) }
         } else {
             s.chain = 0
         }
@@ -64,8 +67,9 @@ extension BattleScreen {
         }
         switch card.kind {
         case .strike:
-            doStrike(s, power: card.power * mul * (chase ? 1.15 : 1), hits: card.hits, style: .normal, chase: chase)
-        case .blast: doBlast(s, power: card.power * mul, hits: card.hits)
+            doStrike(s, power: card.power * mul * (chase ? 1.15 : 1), hits: card.hits, style: .normal, chase: chase,
+                     sig: Signatures.of(card, s.current.def))
+        case .blast: doBlast(s, power: card.power * mul, hits: card.hits, sig: Signatures.of(card, s.current.def))
         case .special: doSpecial(s, card: card, mul: mul)
         case .effect: doEffect(s, card)
         case .ultimate:
@@ -200,8 +204,20 @@ extension BattleScreen {
 
     /// Actual evade cost right now: double while escaping hitstun (combo escape).
     /// Shared by manual input, enemy AI and the player's AUTO mode.
-    func dodgeCost(_ s: Side) -> Double {
-        Tune.dodgeCost * (now < s.current.stunUntil ? 2 : 1)
+    func dodgeCost(_ s: Side) -> Double { Tune.dodgeCost }
+
+    /// Being hit: the fighter can neither act nor vanish until the attacker's combo ends
+    /// (no energy / no follow-up) or this side switches fighters.
+    func inHitstun(_ s: Side) -> Bool {
+        let c = s.current
+        return started && !battleOver && !cinematic && !c.isKO && now < c.stunUntil
+    }
+
+    /// After a card lands, the defender stays locked through the attacker's chain window.
+    func extendLock(_ s: Side) {
+        let t = opponent(of: s).current
+        guard !t.isKO, now < t.stunUntil, now - s.lastHitTime < 0.8 else { return }
+        t.stunUntil = max(t.stunUntil, s.chainOpenUntil + 0.05)
     }
 
     /// Evade: a sidestep around the opponent with brief invincibility. Also breaks combos.
@@ -209,9 +225,8 @@ extension BattleScreen {
     @discardableResult
     func dodge(_ s: Side, lateral: Float) -> Bool {
         let c = s.current
-        let escaping = now < c.stunUntil
         let cost = dodgeCost(s)
-        guard started, !battleOver, !cinematic, !c.isKO, s.dodge >= cost else { return false }
+        guard started, !battleOver, !cinematic, !c.isKO, now >= c.stunUntil, s.dodge >= cost else { return false }
         s.dodge -= cost
         timeline.cancel(tag: c)
         c.busy = false
@@ -219,7 +234,6 @@ extension BattleScreen {
         c.invulnUntil = now + c.def.speed.invuln
         c.vanishStart = now
         c.perfectUsed = false
-        if escaping { popup(L("battle.escape"), at: c.chest + SIMD3(0, 0.9, 0), color: Theme.energy, size: 18) }
         c.model.afterimage(in: fxRoot)
         let t = opponent(of: s).current
         let rel = c.pos - t.pos
@@ -241,8 +255,10 @@ extension BattleScreen {
 
     enum StrikeStyle { case normal, basic, rush, eclipse }
 
-    func doStrike(_ s: Side, power: Double, hits: Int, style: StrikeStyle, chase: Bool = false) {
+    func doStrike(_ s: Side, power: Double, hits: Int, style: StrikeStyle, chase: Bool = false, sig given: CardSig? = nil) {
         let a = s.current
+        let sig = given ?? (style == .basic ? Signatures.basic(a.def)
+                            : Signatures.of(style == .eclipse ? Roster.eclipseCard : a.def.specialCard, a.def))
         let o = opponent(of: s)
         let t = o.current
         a.busy = true
@@ -280,12 +296,10 @@ extension BattleScreen {
         let speed: Double = rushy ? 1.4 : (style == .basic ? 1.1 : 1.0)
         let nearBonus = RangeZone.of(d) == .near ? 1.1 : 1.0
         let per = power / Double(hits) * nearBonus
-        // Keyframed string: anticipation → impact → recovery for every hit, heavy finisher last.
-        let finisher = rushy ? Moves.smash : (Bool.random() ? Moves.uppercut : Moves.flyingKick)
+        // Keyframed string from this card's signature: anticipation → impact → recovery per hit, heavy finisher last.
         let clips: [Clip] = (0..<hits).map { i in
-            if style == .basic { return Moves.basicString[i % Moves.basicString.count] }
-            if i == hits - 1 && hits > 2 { return finisher }
-            return Moves.string[(i + Int.random(in: 0...1) * 2) % Moves.string.count]
+            if i == hits - 1 && hits > 2 && style != .basic { return sig.finisher }
+            return sig.strikes[i % sig.strikes.count]
         }
         for i in 0..<hits {
             let last = i == hits - 1
@@ -294,6 +308,7 @@ extension BattleScreen {
             steps.append((delay, { [weak self] in
                 guard let self else { return }
                 a.model.play(clip, speed: speed)
+                Sound.play(.whoosh, pitch: sig.pitch * (last ? 0.85 : 1.1))
                 // The hit lands on the clip's impact frame.
                 self.timeline.after(clip.impact / speed, tag: a) { [weak self] in
                     guard let self else { return }
@@ -303,7 +318,7 @@ extension BattleScreen {
                     let heavy = last && style != .basic
                     self.applyHit(from: s, power: per * (last ? 1.4 : 1), stun: last ? 0.7 : 0.4,
                                   knock: heavy ? (style == .normal ? 9 : 13) : 1.5, heavy: heavy, aiDodge: aiChance,
-                                  basic: style == .basic)
+                                  basic: style == .basic, sfx: heavy ? sig.heavyImpact : sig.impact, pitch: sig.pitch)
                     // Follow-up glide keeps combos connected.
                     if !last {
                         let dir = self.dirTo(a, target)
@@ -316,6 +331,7 @@ extension BattleScreen {
         steps.append(((clips.last?.impact ?? 0) / speed + 0.05, { [weak self] in
             guard let self else { return }
             s.chainOpenUntil = self.now + 0.55
+            self.extendLock(s)
             self.awardShard(s)
         }))
         steps.append((style == .basic ? 0.16 : 0.14, {
@@ -326,11 +342,13 @@ extension BattleScreen {
 
     // MARK: - Blasts
 
-    func doBlast(_ s: Side, power: Double, hits: Int, small: Bool = false, big: Bool = false) {
+    func doBlast(_ s: Side, power: Double, hits: Int, small: Bool = false, big: Bool = false, sig given: CardSig? = nil) {
         let a = s.current
+        let sig = given ?? Signatures.basic(a.def)
+        let shot = big ? Moves.shotBig : sig.shot
         a.busy = true
         timeline.cancel(tag: a)
-        let first = a.model.blast(big: big)
+        let first = a.model.shoot(shot)
         // Hand glow while charging the shot; kept small when the hand is right in front of the camera.
         let near = Float(camScale(a.model.handWorld))
         let glow = Toon.glowSprite(a.def.aura, size: CGFloat(0.35 * near))
@@ -344,13 +362,14 @@ extension BattleScreen {
                 guard let self else { return }
                 let fire = { [weak self] in
                     self?.spawnProjectile(s, power: power / Double(hits), radius: big ? 0.5 : (small ? 0.18 : (hits == 1 ? 0.32 : 0.22)),
-                                          spread: hits > 1 ? Float(i % 2 == 0 ? 1 : -1) * Float(i) * 0.06 : 0)
+                                          spread: hits > 1 ? Float(i % 2 == 0 ? 1 : -1) * Float(i) * 0.06 : 0,
+                                          sfx: sig.fire, pitch: sig.pitch)
                 }
                 if i == 0 {
                     fire()
                 } else {
-                    let c = a.model.blast()
-                    self.timeline.after(c.impact * 0.6, tag: a) { fire() }
+                    let c = a.model.shoot(shot, speed: 1.4)
+                    self.timeline.after(c.impact / 1.4, tag: a) { fire() }
                 }
             }))
         }
@@ -358,6 +377,7 @@ extension BattleScreen {
             glow.removeFromParentNode()
             guard let self else { return }
             s.chainOpenUntil = self.now + 0.55
+            self.extendLock(s)
         }))
         steps.append((small ? 0.2 : 0.16, {
             a.busy = false
@@ -365,7 +385,7 @@ extension BattleScreen {
         timeline.sequence(tag: a, steps)
     }
 
-    func spawnProjectile(_ s: Side, power: Double, radius: Float, spread: Float) {
+    func spawnProjectile(_ s: Side, power: Double, radius: Float, spread: Float, sfx: SFX = .blast, pitch: Float = 1) {
         let a = s.current
         let t = opponent(of: s).current
         let start = a.model.handWorld
@@ -390,7 +410,7 @@ extension BattleScreen {
         fxRoot.addChildNode(n)
         let farBonus = RangeZone.of(dist(a, t)) == .far ? 1.1 : 1.0
         projectiles.append(Projectile(node: n, owner: s, pos: start, vel: dir * Tune.blastSpeed, radius: radius, power: power * farBonus))
-        Sound.play(.blast)
+        Sound.play(sfx, pitch: pitch)
     }
 
     func updateProjectiles(_ dt: Double) {
@@ -762,7 +782,7 @@ extension BattleScreen {
 
     /// AI pre-check uses the same real cost as `dodge` (double while in hitstun).
     func canAIDodge(_ s: Side) -> Bool {
-        (!s.isPlayer || s.auto) && !s.current.isKO && s.dodge >= dodgeCost(s) && !battleOver
+        (!s.isPlayer || s.auto) && !s.current.isKO && s.dodge >= dodgeCost(s) && !battleOver && now >= s.current.stunUntil
     }
 
     func awardShard(_ s: Side) {
@@ -775,7 +795,8 @@ extension BattleScreen {
 
     @discardableResult
     func applyHit(from s: Side, power: Double, stun: Double, knock: Float, heavy: Bool, aiDodge: Double,
-                  ignoreInvuln: Bool = false, basic: Bool = false, source: SIMD2<Float>? = nil) -> Bool {
+                  ignoreInvuln: Bool = false, basic: Bool = false, source: SIMD2<Float>? = nil,
+                  sfx: SFX? = nil, pitch: Float = 1) -> Bool {
         let o = opponent(of: s)
         let t = o.current
         let a = s.current
@@ -839,8 +860,8 @@ extension BattleScreen {
         shake = max(shake, heavy ? 0.1 : 0.025)
         if heavy || crit { fovKick = max(-6, fovKick - (heavy ? 4 : 2)) }
         if heavy && !o.isPlayer { hud.screenFlash(UIColor(white: 1, alpha: 0.5)) }
-        Sound.play(heavy || crit ? .heavy : .hit)
-        if heavy && !basic { Sound.play(.hit) }
+        Sound.play(sfx ?? (heavy || crit ? .heavy : .hit), pitch: pitch)
+        if heavy && !basic { Sound.play(.crack, pitch: pitch * 0.8) }
         if s.isPlayer || o.isPlayer {
             if crit { Haptics.rigid.impactOccurred(intensity: 1) } else { Haptics.hit(heavy) }
         }
@@ -889,7 +910,8 @@ extension BattleScreen {
     func swap(_ s: Side, to index: Int, forced: Bool) -> Bool {
         guard index != s.active, index >= 0, index < s.team.count, !s.team[index].isKO else { return false }
         if !forced {
-            guard canAct(s), now >= s.swapReadyAt else { return false }
+            // Switching is also the way out of a combo (DBL-style).
+            guard canAct(s) || inHitstun(s), now >= s.swapReadyAt else { return false }
         }
         swapCore(s, to: index, banner: L10n.f("battle.tagin", s.team[index].def.name.s))
         return true
@@ -900,6 +922,16 @@ extension BattleScreen {
     func swapCore(_ s: Side, to index: Int, banner: String) {
         let old = s.current
         let pos = old.pos
+        let escaping = now < old.stunUntil && !old.isKO
+        if escaping {
+            // Breaking out of a combo interrupts the attacker's current card.
+            let o = opponent(of: s)
+            timeline.cancel(tag: o.current)
+            o.current.busy = false
+            o.chainOpenUntil = 0
+            o.current.model.stance()
+            popup(L("battle.breakout"), at: old.chest + SIMD3(0, 0.9, 0), color: Theme.energy, size: 20)
+        }
         timeline.cancel(tag: old)
         old.model.root.removeFromParentNode()
         old.charging(false)

@@ -52,6 +52,8 @@ final class BattleHUD {
     private var abilityBtn: UIButton!
     private let abilityRing = RingView(color: Theme.accent)
     private var abilityState = -1
+    private let lockHint = Glass.caption("", size: 9, color: Theme.hpEnemy)
+    private var lockState = -1
 
     init(screen: BattleScreen) {
         self.screen = screen
@@ -191,6 +193,12 @@ final class BattleHUD {
             pBench.append(p)
         }
         root.addSubview(benchRow)
+        lockHint.alpha = 0
+        root.addSubview(lockHint)
+        NSLayoutConstraint.activate([
+            lockHint.leadingAnchor.constraint(equalTo: benchRow.leadingAnchor),
+            lockHint.bottomAnchor.constraint(equalTo: benchRow.topAnchor, constant: -6),
+        ])
 
         let energyPanel = Glass.panel(radius: 28)
         energyPanel.contentView.addSubview(energyText)
@@ -426,6 +434,16 @@ final class BattleHUD {
         }
     }
 
+    private func updateLock() {
+        guard let s = screen else { return }
+        let state = s.inHitstun(s.player) && s.player.current.stunUntil - s.now > 0.25
+            ? (s.now >= s.player.swapReadyAt ? 2 : 1) : 0
+        guard state != lockState else { return }
+        lockState = state
+        if state > 0 { Glass.setCaption(lockHint, L(state == 2 ? "battle.locked" : "battle.lockedWait")) }
+        UIView.animate(withDuration: 0.15) { self.lockHint.alpha = state > 0 ? 1 : 0 }
+    }
+
     private func updateAbility() {
         guard let s = screen else { return }
         let c = s.player.current
@@ -446,6 +464,7 @@ final class BattleHUD {
 
     func update(dt: Double) {
         updateAbility()
+        updateLock()
         guard let s = screen, let p = s.player, let e = s.enemy else { return }
         let pc = p.current
         let ec = e.current

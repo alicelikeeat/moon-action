@@ -206,3 +206,123 @@ enum Moves {
         Clip(name: "pose", keys: [Key(max(0.01, duration), pose, ease: .inOut)], hold: true)
     }
 }
+
+// MARK: - Extended move set (style / per-card variety)
+
+extension Moves {
+    private static func Q(_ e: [(Joint, Float, Float, Float)]) -> Pose {
+        var p: Pose = [:]
+        for (j, x, y, z) in e { p[j] = SIMD3(x, y, z) }
+        return p
+    }
+
+    static let elbow = Clip(name: "elbow", keys: [
+        Key(0.06, Q([(.spine, 0.1, -0.4, 0), (.shoulderR, -1.3, 0, -1.1), (.elbowR, -2.3, 0, 0)])),
+        Key(0.11, Q([(.spine, 0.25, 0.7, 0), (.shoulderR, -1.45, 0, 0.35), (.elbowR, -2.4, 0, 0), (.shoulderL, -1.0, 0, 0.5)]),
+            body: SIMD3(0, -0.04, 0.16), rot: SIMD3(0, 0.25, 0), ease: .snap),
+        Key(0.19, Q([(.spine, 0.25, 0.7, 0)]), body: SIMD3(0, -0.04, 0.16), rot: SIMD3(0, 0.25, 0)),
+    ], impact: 0.11, blendOut: 0.16)
+
+    static let backfist = Clip(name: "backfist", keys: [
+        Key(0.07, Q([(.spine, 0, 0.6, 0), (.shoulderL, -1.4, 0, -0.5), (.elbowL, -2.2, 0, 0)]), rot: SIMD3(0, 0.6, 0)),
+        Key(0.13, Q([(.spine, 0.05, -0.5, 0), (.shoulderL, -1.5, 0, 1.2), (.elbowL, -0.2, 0, 0), (.head, 0, -0.3, 0)]),
+            body: SIMD3(0, 0, 0.12), rot: SIMD3(0, -0.5, 0), ease: .snap),
+        Key(0.2, Q([(.shoulderL, -1.45, 0, 1.15), (.elbowL, -0.3, 0, 0)]), body: SIMD3(0, 0, 0.12), rot: SIMD3(0, -0.5, 0)),
+    ], impact: 0.13, blendOut: 0.18)
+
+    static let palm = Clip(name: "palm", keys: [
+        Key(0.07, Q([(.spine, 0.05, -0.4, 0), (.shoulderR, 0.1, 0, -0.4), (.elbowR, -2.0, 0, 0), (.kneeL, 1.1, 0, 0), (.kneeR, 1.1, 0, 0)]),
+            body: SIMD3(0, -0.1, -0.04)),
+        Key(0.12, Q([(.spine, 0.3, 0.5, 0), (.shoulderR, -1.55, 0, 0), (.elbowR, 0, 0, 0), (.hipL, -0.9, 0, 0.1), (.kneeL, 1.0, 0, 0),
+                     (.hipR, 0.5, 0, -0.1), (.kneeR, 0.2, 0, 0)]), body: SIMD3(0, -0.12, 0.22), ease: .snap),
+        Key(0.22, Q([(.spine, 0.3, 0.5, 0)]), body: SIMD3(0, -0.12, 0.22)),
+    ], impact: 0.12, blendOut: 0.18)
+
+    static let bodyBlow = Clip(name: "bodyBlow", keys: [
+        Key(0.06, Q([(.spine, 0.45, -0.3, 0), (.shoulderR, -0.2, 0, -0.3), (.elbowR, -1.9, 0, 0), (.kneeL, 1.2, 0, 0), (.kneeR, 1.2, 0, 0)]),
+            body: SIMD3(0, -0.16, 0)),
+        Key(0.11, Q([(.spine, 0.55, 0.5, 0), (.shoulderR, -1.25, 0, 0), (.elbowR, -0.3, 0, 0)]), body: SIMD3(0, -0.18, 0.18), ease: .snap),
+        Key(0.18, Q([(.spine, 0.5, 0.5, 0)]), body: SIMD3(0, -0.18, 0.18)),
+    ], impact: 0.11, blendOut: 0.16)
+
+    static let sideKick = Clip(name: "sideKick", keys: [
+        Key(0.08, Q([(.spine, -0.1, 0.9, 0), (.hipL, -1.3, 0, 0.2), (.kneeL, 2.0, 0, 0)]), rot: SIMD3(0, -0.9, 0)),
+        Key(0.15, Q([(.spine, -0.35, 0.9, 0.45), (.hipL, -1.5, 0, 0.6), (.kneeL, 0.05, 0, 0), (.shoulderL, -0.3, 0, 0.6), (.shoulderR, 0.3, 0, -1.0)]),
+            body: SIMD3(0, 0.05, 0.16), rot: SIMD3(0, -1.2, 0), ease: .snap),
+        Key(0.25, Q([(.hipL, -1.4, 0, 0.6), (.kneeL, 0.2, 0, 0)]), body: SIMD3(0, 0.05, 0.16), rot: SIMD3(0, -1.2, 0)),
+    ], impact: 0.15, blendOut: 0.2)
+
+    static let lowSweep = Clip(name: "lowSweep", keys: [
+        Key(0.08, Q([(.spine, 0.5, 0, 0), (.hipL, -1.5, 0, 0.3), (.kneeL, 2.2, 0, 0), (.hipR, -0.3, 0, -0.6), (.kneeR, 0.2, 0, 0),
+                     (.shoulderL, -0.5, 0, 0.9), (.shoulderR, -0.5, 0, -0.9)]), body: SIMD3(0, -0.42, 0), rot: SIMD3(0, 0.6, 0)),
+        Key(0.16, Q([(.hipR, -1.2, 0, -1.3), (.kneeR, 0.05, 0, 0)]), body: SIMD3(0, -0.45, 0.08), rot: SIMD3(0, 2.6, 0), ease: .snap),
+        Key(0.3, [:], body: SIMD3(0, -0.4, 0.08), rot: SIMD3(0, 2 * .pi, 0), ease: .inOut),
+    ], impact: 0.16, blendOut: 0.2)
+
+    static let axeKick = Clip(name: "axeKick", keys: [
+        Key(0.1, Q([(.spine, -0.35, 0, 0), (.hipR, -2.6, 0, -0.2), (.kneeR, 0.1, 0, 0), (.shoulderL, -0.4, 0, 0.8), (.shoulderR, -0.4, 0, -0.8)]),
+            body: SIMD3(0, 0.08, -0.04)),
+        Key(0.17, Q([(.spine, 0.45, 0, 0), (.hipR, -0.9, 0, 0), (.kneeR, 0.1, 0, 0)]), body: SIMD3(0, -0.04, 0.2), ease: .snap),
+        Key(0.28, Q([(.spine, 0.4, 0, 0), (.hipR, -0.7, 0, 0), (.kneeR, 0.4, 0, 0)]), body: SIMD3(0, -0.06, 0.2)),
+    ], impact: 0.17, blendOut: 0.22)
+
+    /// Shoulder tackle finisher: whole body drives through.
+    static let tackle = Clip(name: "tackle", keys: [
+        Key(0.1, Q([(.spine, 0.2, -0.9, 0), (.shoulderR, -0.3, 0, -0.2), (.elbowR, -2.2, 0, 0), (.kneeL, 1.2, 0, 0), (.kneeR, 1.2, 0, 0)]),
+            body: SIMD3(0, -0.14, -0.08), rot: SIMD3(0, 0.6, 0)),
+        Key(0.17, Q([(.spine, 0.55, -0.9, 0), (.hipL, -1.0, 0, 0.1), (.kneeL, 0.8, 0, 0), (.hipR, 0.6, 0, -0.1), (.kneeR, 0.2, 0, 0)]),
+            body: SIMD3(0, -0.06, 0.45), rot: SIMD3(0, 0.9, 0), ease: .snap),
+        Key(0.3, [:], body: SIMD3(0, -0.06, 0.45), rot: SIMD3(0, 0.9, 0)),
+    ], impact: 0.17, blendOut: 0.24)
+
+    static let doublePalm = Clip(name: "doublePalm", keys: [
+        Key(0.12, Q([(.spine, -0.1, 0, 0), (.shoulderL, 0.2, 0, 0.3), (.shoulderR, 0.2, 0, -0.3), (.elbowL, -2.0, 0, 0), (.elbowR, -2.0, 0, 0),
+                     (.kneeL, 1.0, 0, 0), (.kneeR, 1.0, 0, 0)]), body: SIMD3(0, -0.1, -0.06)),
+        Key(0.18, Q([(.spine, 0.35, 0, 0), (.shoulderL, -1.55, 0, -0.15), (.shoulderR, -1.55, 0, 0.15), (.elbowL, 0, 0, 0), (.elbowR, 0, 0, 0),
+                     (.hipL, -1.0, 0, 0.1), (.kneeL, 0.9, 0, 0), (.hipR, 0.5, 0, -0.1), (.kneeR, 0.2, 0, 0)]),
+            body: SIMD3(0, -0.1, 0.3), ease: .snap),
+        Key(0.32, Q([(.spine, 0.3, 0, 0)]), body: SIMD3(0, -0.1, 0.3)),
+    ], impact: 0.18, blendOut: 0.24)
+
+    /// Superman punch: leap forward, arm fully extended.
+    static let flyingPunch = Clip(name: "flyingPunch", keys: [
+        Key(0.09, Q([(.spine, 0.3, -0.4, 0), (.shoulderR, 0.5, 0, -0.3), (.elbowR, -1.6, 0, 0), (.kneeL, 1.3, 0, 0), (.kneeR, 1.3, 0, 0)]),
+            body: SIMD3(0, -0.15, -0.06)),
+        Key(0.17, Q([(.spine, 0.5, 0.6, 0), (.shoulderR, -1.7, 0, 0), (.elbowR, 0, 0, 0), (.shoulderL, 0.6, 0, 0.4), (.hipR, 0.9, 0, 0),
+                     (.kneeR, 1.2, 0, 0), (.hipL, -0.6, 0, 0.1), (.kneeL, 0.6, 0, 0)]),
+            body: SIMD3(0, 0.35, 0.42), rot: SIMD3(0.4, 0, 0), ease: .snap),
+        Key(0.3, [:], body: SIMD3(0, 0.2, 0.42), rot: SIMD3(0.3, 0, 0)),
+    ], impact: 0.17, blendOut: 0.24)
+
+    /// Tornado kick: jumping 540° spin.
+    static let tornadoKick = Clip(name: "tornadoKick", keys: [
+        Key(0.08, Q([(.spine, 0.2, 0, 0), (.kneeL, 1.3, 0, 0), (.kneeR, 1.3, 0, 0)]), body: SIMD3(0, -0.14, 0), rot: SIMD3(0, 0.5, 0)),
+        Key(0.17, Q([(.hipL, -1.2, 0, 0.3), (.kneeL, 1.6, 0, 0), (.shoulderL, 0, 0, 1.3), (.shoulderR, 0, 0, -1.3)]),
+            body: SIMD3(0, 0.45, 0.1), rot: SIMD3(0, 3.0, 0), ease: .linear),
+        Key(0.23, Q([(.spine, -0.35, 0, 0.3), (.hipR, -1.55, 0, -0.7), (.kneeR, 0.05, 0, 0)]),
+            body: SIMD3(0, 0.5, 0.25), rot: SIMD3(0, 4.6, 0), ease: .snap),
+        Key(0.36, Q([(.hipR, -1.0, 0, -0.3), (.kneeR, 0.6, 0, 0)]), body: SIMD3(0, 0.05, 0.25), rot: SIMD3(0, 2 * .pi, 0), ease: .inQuad),
+    ], impact: 0.23, blendOut: 0.2)
+
+    // Shot variants
+
+    static let shotThrow = Clip(name: "shotThrow", keys: [
+        Key(0.1, Q([(.spine, -0.3, -0.4, 0), (.shoulderR, -2.9, 0, -0.3), (.elbowR, -1.4, 0, 0), (.shoulderL, -1.2, 0, 0.5)]), body: SIMD3(0, 0.04, -0.06)),
+        Key(0.16, Q([(.spine, 0.45, 0.4, 0), (.shoulderR, -1.3, 0, 0), (.elbowR, -0.1, 0, 0)]), body: SIMD3(0, 0, 0.12), ease: .snap),
+        Key(0.26, Q([(.spine, 0.4, 0.4, 0), (.shoulderR, -1.1, 0, 0)]), body: SIMD3(0, 0, 0.1)),
+    ], impact: 0.16, blendOut: 0.18)
+
+    static let shotDisc = Clip(name: "shotDisc", keys: [
+        Key(0.1, Q([(.spine, 0, 0.8, 0), (.shoulderR, -1.3, 0, -1.4), (.elbowR, -0.6, 0, 0)]), rot: SIMD3(0, 0.6, 0)),
+        Key(0.16, Q([(.spine, 0.1, -0.6, 0), (.shoulderR, -1.5, 0, 0.6), (.elbowR, -0.05, 0, 0)]), body: SIMD3(0, 0, 0.1), rot: SIMD3(0, -0.5, 0), ease: .snap),
+        Key(0.26, Q([(.shoulderR, -1.45, 0, 0.7)]), body: SIMD3(0, 0, 0.08), rot: SIMD3(0, -0.5, 0)),
+    ], impact: 0.16, blendOut: 0.18)
+
+    static let shotPalm = Clip(name: "shotPalm", keys: [
+        Key(0.09, Q([(.spine, -0.1, 0, 0), (.shoulderL, -0.6, 0, 0.2), (.shoulderR, -0.6, 0, -0.2), (.elbowL, -2.0, 0, 0), (.elbowR, -2.0, 0, 0)]),
+            body: SIMD3(0, -0.04, -0.04)),
+        Key(0.14, Q([(.spine, 0.2, 0, 0), (.shoulderL, -1.55, 0, -0.12), (.shoulderR, -1.55, 0, 0.12), (.elbowL, 0, 0, 0), (.elbowR, 0, 0, 0)]),
+            body: SIMD3(0, -0.04, 0.12), ease: .snap),
+        Key(0.24, Q([(.spine, 0.1, 0, 0)]), body: SIMD3(0, -0.02, -0.06)),
+    ], impact: 0.14, blendOut: 0.18)
+}
