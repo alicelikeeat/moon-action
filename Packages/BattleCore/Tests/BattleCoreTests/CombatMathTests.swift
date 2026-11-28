@@ -28,7 +28,7 @@ final class CombatMathTests: XCTestCase {
         // Buff = (1 + 0.3) × max(0.2, 1 − max(0, 0.4 − 0.1)) = 1.3 × 0.7 = 0.91
         let buffed = CombatMath.damage(attack: 200_000, cardMultiplier: 1.2, defense: 100_000, damageUp: 0.3, damageCut: 0.4,
                                        cutPenetration: 0.1, attacker: .lgt, defender: .lgt)
-        XCTAssertEqual(buffed, Double(Int(185_000 * 1.3 * 0.7)))
+        XCTAssertEqual(buffed, 185_000 * 1.3 * 0.7, accuracy: 1)
         // Cut floor 0.2
         let floored = CombatMath.damage(attack: 200_000, cardMultiplier: 1.2, defense: 100_000, damageCut: 2, attacker: .lgt, defender: .lgt)
         XCTAssertEqual(floored, Double(Int(185_000 * 0.2)))

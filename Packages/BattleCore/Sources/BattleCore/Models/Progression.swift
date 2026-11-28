@@ -102,7 +102,7 @@ public enum TeamBuild {
             }
             // FinalATK = Base × (1 + Z% + BaseEquip%) × (1 + PureEquip%)
             var f = FinalStats(
-                hp: base.hp * (1 + eq.hp),
+                hp: base.hp * (1 + z + eq.hp),
                 strikeAtk: base.strikeAtk * (1 + z + eq.strikeAtk) * (1 + eq.pure),
                 blastAtk: base.blastAtk * (1 + z + eq.blastAtk) * (1 + eq.pure),
                 defense: base.defense * (1 + z + eq.defense))
