@@ -1,3 +1,14 @@
+## v2 阶段 2 · Phase 2 — 3D 镜头、冲刺与受击 / Camera, dashes, hitstun
+- 新镜头控制器：弹簧阻尼平滑；越肩 48° / 前冲广角 56° + 速度线 / 瞬移 120° 反打切镜 / 必杀仰拍特写 38° / Spring-damped camera with dash, vanish-cut and close-up shots
+- 受击分级：轻受击 0.30s、连击受击 0.47s、重击飞 0.67s + 空中受身；霸体白闪；眩晕与麻痹 / Light, combo, heavy hitstun with air recovery; armor flash; stun & paralysis
+- 前冲 0.28s（可用卡取消），后撤带 0.15s 收招硬直；浮空待机；瞬移三层残影 / Forward dash cancel, back-dash recovery, hover idle, 3-layer afterimages
+
+## v2 阶段 3 · Phase 3 — 进阶连击与特殊量表 / Advanced combos & unique gauges
+- 输入缓冲 0.25s、侧滑连（≤0.42s：+8 气、闪避+10%、抽卡加速）、聚气连（+15 气）、主动断连（>0.45s）/ Input buffer, side-step & charge-step combos, drop combo
+- 四种特殊量表：攻击爆发（凯）、自动闪避（瑟菲）、受击反制（克洛斯，每局 3 次）、形态充能超载（诺瓦）/ 4 unique gauges
+- 拼招对决：双方打击卡相撞，3 秒 0–999 能量条点击锁定，高分者免费追击 / Strike clash bar
+- 升龙冲击：集满 7 珠，命中后 4 选 1 猜卡，猜错吃终结技、猜中弹反 / Rising Rush 1-of-4 guess
+
 ## v2 阶段 1 · Phase 1 — BattleCore 数据层 / Data layer
 - 新阵容 6 人：克洛斯 UL 红 · 瑟菲 UL 蓝 · 凯 LL 紫 · 诺瓦 LL 黄 · 岚 SP 绿 · 塞拉 SP 光 / New 6-fighter roster (2 UL, 2 LL, 2 SP)
 - 等级 1–5000、星级 1–14、Z 能力 I–IV、队长规则、UL 极限能力 / Levels, stars, Z abilities, leader rules, Ultra ability
