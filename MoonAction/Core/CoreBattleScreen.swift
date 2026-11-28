@@ -83,7 +83,16 @@ final class CoreBattleScreen: Screen {
         placeModels(dt: 1)
         snapCamera()
 
-        hud.onPlay = { [weak self] slot in self?.input(.play(slot)) }
+        hud.onPlay = { [weak self] slot in
+            guard let self else { return }
+            // During a Rising Rush the hand doubles as the 4-way pick / guess.
+            if let r = self.engine.rush {
+                if r.attacker == 0 && !r.landed { self.input(.rushPick(slot)) } else if r.attacker == 1 && r.landed { self.input(.rushGuess(slot)) }
+                return
+            }
+            self.input(.play(slot))
+        }
+        hud.onRush = { [weak self] in self?.input(.risingRush) }
         hud.onSwitch = { [weak self] i in self?.input(.switchTo(i)) }
         hud.onHaptics = { [weak self] in
             Haptics.enabled.toggle()
@@ -102,6 +111,19 @@ final class CoreBattleScreen: Screen {
         hud.sync(engine)
         addHUD(CoreTopHUD(m: hud), top: true)
         addHUD(CoreBottomHUD(m: hud), top: false)
+        let clashHost = UIHostingController(rootView: CoreClashOverlay(m: hud))
+        clashHost.view.backgroundColor = .clear
+        clashHost.view.isUserInteractionEnabled = false
+        clashHost.view.translatesAutoresizingMaskIntoConstraints = false
+        host?.addChild(clashHost)
+        ui.addSubview(clashHost.view)
+        clashHost.didMove(toParent: host)
+        NSLayoutConstraint.activate([
+            clashHost.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
+            clashHost.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            clashHost.view.centerYAnchor.constraint(equalTo: safe.centerYAnchor, constant: -40),
+        ])
+        hosts.append(clashHost)
 
         comboLabel.textAlignment = .right
         comboLabel.alpha = 0
@@ -513,6 +535,70 @@ final class CoreBattleScreen: Screen {
             m.react(.head, heavy: false)
             VFX.impact(at: m.chestWorld, color: UIColor(hex: 0xF2E15C), heavy: false, in: fx, dir: SIMD3(0, 1, 0), scale: 0.6)
             Sound.play(.crack, pitch: 1.6)
+        case .gaugeTriggered(let s, let type):
+            let m = model(s)
+            let foe = s == 0 ? "" : (L10n.isZH ? "对手 · " : "Foe · ")
+            switch type {
+            case .attack:
+                callout(foe + (L10n.isZH ? "攻击爆发 · +40 气 · 援护无效" : "ATTACK BURST · +40 KI"), color: UIColor(hex: 0xFF7340), symbol: "flame.fill")
+                m.setAura(3)
+                realDelay(1.0) { m.setAura(0) }
+            case .counter:
+                callout(foe + (L10n.isZH ? "受击反制！" : "COUNTER GAUGE!"), color: UIColor(hex: 0xC49BFF), symbol: "shield.righthalf.filled")
+                model(1 - s).react(.launch, heavy: true)
+                hitStop = max(hitStop, 0.12)
+                cam.shake = max(cam.shake, 0.1)
+            case .release:
+                callout(foe + (L10n.isZH ? "超载形态 · 伤害+30%" : "OVERLOAD FORM · +30% DMG"), color: UIColor(hex: 0x66C0FF), symbol: "bolt.circle.fill")
+                m.setPowered(true)
+            case .autoEvade:
+                break
+            }
+            Sound.play(.charge)
+        case .autoEvaded(let s):
+            let m = model(s)
+            m.afterimage(in: fx)
+            ghostTrail(m)
+            lateral[s] = (lateral[s] >= 0 ? -1 : 1) * 1.3
+            popup(L10n.isZH ? "自动闪避" : "AUTO EVADE", over: s, color: UIColor(hex: 0xDDE6FF), size: 18)
+            Sound.play(.dodge)
+        case .clashStarted:
+            banner(L10n.isZH ? "拼招对决！" : "CLASH!", size: 30, color: Theme.accent)
+            for s in 0..<2 { model(s).play(Moves.coverGuard) }
+            cam.shake = max(cam.shake, 0.14)
+            Sound.play(.heavy, pitch: 0.8)
+            if Haptics.enabled { Haptics.heavy.impactOccurred() }
+        case .clashLocked(let s, let score):
+            popup("\(score)", over: s, color: s == 0 ? Theme.accent : Theme.hpEnemy, size: 22)
+            Sound.play(.ui, pitch: 1.2)
+        case .clashResolved(let w, let scores):
+            if let w {
+                banner((w == 0 ? (L10n.isZH ? "拼招胜利 " : "CLASH WON ") : (L10n.isZH ? "拼招落败 " : "CLASH LOST ")) + "\(scores[0]) : \(scores[1])",
+                       size: 22, color: w == 0 ? Theme.accent : Theme.hpEnemy)
+            } else {
+                banner(L10n.isZH ? "拼招平手" : "CLASH DRAW", size: 22)
+            }
+        case .rushStarted(let s):
+            banner(L10n.isZH ? "升龙冲击！" : "RISING RUSH!", size: 30, color: Theme.accent)
+            model(s).setAura(3)
+            model(s).play(Moves.charge)
+            Sound.play(.charge)
+        case .rushMissed(let s):
+            model(s).setAura(0)
+            popup(L10n.isZH ? "落空" : "MISS", over: s, color: Theme.text2, size: 16)
+        case .rushGuessing:
+            cam.shake = max(cam.shake, 0.08)
+        case .rushParried(let s):
+            model(1 - s).setAura(0)
+            banner(L10n.isZH ? "看破！升龙被弹反" : "READ! RUSH PARRIED", size: 24, color: Theme.energy)
+            model(1 - s).react(.head, heavy: true)
+        case .rushFinish(let s):
+            model(s).setAura(0)
+            banner(L10n.isZH ? "升龙冲击 · 终结" : "RISING RUSH · FINISH", size: 26, color: Theme.accent)
+            VFX.explosion(at: model(1 - s).chestWorld, color: visual(s).aura, in: fx)
+            cam.shake = max(cam.shake, 0.25)
+            hitStop = max(hitStop, 0.2)
+            if Haptics.enabled { Haptics.heavy.impactOccurred() }
         case .comboRoute(let s, let route):
             guard s == 0 else { break }
             switch route {
@@ -858,6 +944,10 @@ final class CoreBattleScreen: Screen {
     private var acceptsGestures: Bool { !hud.paused && !hud.auto && !finished }
 
     override func touchesBegan(_ touches: Set<UITouch>, in view: UIView) {
+        if engine.clash != nil, !hud.auto {
+            input(.clashTap)
+            return
+        }
         guard acceptsGestures else { return }
         for t in touches {
             liveTouches[touchID(t)] = t

@@ -10,6 +10,15 @@ public enum Difficulty: String, CaseIterable, Sendable {
         }
     }
 
+    /// Clash bar value the AI aims to lock at (0…999).
+    public var clashTarget: Int {
+        switch self {
+        case .novice: return 550
+        case .standard: return 780
+        case .challenge: return 920
+        }
+    }
+
     /// Reaction delay before acting on a warning.
     public var reaction: Double {
         switch self {
@@ -64,7 +73,28 @@ public struct AIController: Sendable {
     /// Call once per rendered frame after `engine.advance`.
     public mutating func update(_ e: inout BattleEngine, _ events: inout [BattleEvent]) {
         guard !e.over else { return }
+        // Clash: lock the bar near the top (better AI waits for a higher value).
+        if let c = e.clash {
+            if c.scores[side] == nil {
+                let v = c.bar(at: e.time)
+                let need = difficulty.clashTarget
+                if (v >= need && e.rng.chance(0.35)) || e.time > c.end - 0.3 { e.apply(.clashTap, side: side, events: &events) }
+            }
+            return
+        }
+        // Rising Rush: defender guesses after a short "thinking" delay; attacker's pick is random.
+        if let r = e.rush {
+            if r.landed, r.attacker != side, r.guess == nil, e.time > r.guessUntil - Tune.rushGuessTime + 1.2 {
+                e.apply(.rushGuess(e.rng.int(4)), side: side, events: &events)
+            }
+            return
+        }
         let me = e.sides[side].current
+        // Unleash the Rising Rush on an opening.
+        if e.canRush(side: side), e.sides[1 - side].current.phase == .stunned || e.rng.chance(0.002) {
+            e.apply(.risingRush, side: side, events: &events)
+            return
+        }
         // Defense: decide once per threat whether to vanish, then react after a human-like delay.
         if let lead = e.incomingThreat(on: side), lead <= Tune.warningWindow.upperBound {
             if !decidedThreat {

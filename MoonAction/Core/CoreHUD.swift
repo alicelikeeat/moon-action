@@ -49,6 +49,17 @@ final class CoreHUDModel: ObservableObject {
     @Published var locked = false
     @Published var paused = false
     @Published var auto = false
+    /// Unique gauge (nil = fighter has none).
+    @Published var gaugeType: UniqueGaugeType?
+    @Published var gauge = 0
+    @Published var overload = false
+    @Published var canRush = false
+    /// Clash bar 0…999 while a clash runs (nil otherwise); locked score once tapped.
+    @Published var clashBar: Int?
+    @Published var clashLocked: Int?
+    enum RushMode: Equatable { case none, pick, guess, wait }
+    @Published var rushMode: RushMode = .none
+    var onRush: () -> Void = {}
 
     var onPlay: (Int) -> Void = { _ in }
     var onSwitch: (Int) -> Void = { _ in }
@@ -74,6 +85,22 @@ final class CoreHUDModel: ObservableObject {
         set(\.combo, p.comboHits)
         set(\.zone, e.zone)
         set(\.orbs, p.orbs)
+        set(\.gaugeType, p.current.def.gauge)
+        set(\.gauge, Int(p.current.gauge))
+        set(\.overload, p.current.overload)
+        set(\.canRush, e.canRush(side: 0))
+        if let c = e.clash {
+            set(\.clashBar, c.scores[0] ?? c.bar(at: e.time))
+            set(\.clashLocked, c.scores[0])
+        } else {
+            set(\.clashBar, nil)
+            set(\.clashLocked, nil)
+        }
+        if let r = e.rush {
+            set(\.rushMode, r.attacker == 0 ? (r.landed ? .wait : .pick) : (r.landed && r.guess == nil ? .guess : .wait))
+        } else {
+            set(\.rushMode, .none)
+        }
         set(\.locked, p.current.phase == .stunned)
         set(\.switchCooldown, Int(e.switchCooldown(side: 0).rounded(.up)))
         set(\.bench, p.team.indices.filter { $0 != p.active }.map { i in
@@ -214,9 +241,24 @@ struct CoreBottomHUD: View {
                 }
                 Spacer()
             }
+            if m.rushMode != .none {
+                SwiftUI.Text(rushPrompt).font(.system(size: 13, weight: .heavy)).foregroundStyle(Color(Theme.accent))
+            }
             HStack(spacing: 8) {
                 ForEach(0..<4, id: \.self) { i in
                     CardSlot(card: m.cards[i]) { m.onPlay(i) }
+                }
+                if m.canRush {
+                    Button(action: m.onRush) {
+                        VStack(spacing: 2) {
+                            Image(systemName: "sparkles").font(.system(size: 18, weight: .bold))
+                            SwiftUI.Text(L10n.isZH ? "升龙" : "RUSH").font(.system(size: 10, weight: .heavy))
+                        }
+                        .frame(width: 52, height: 72)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(Theme.accent).opacity(0.9)))
+                        .foregroundStyle(.black)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             VStack(alignment: .leading, spacing: 5) {
@@ -232,6 +274,11 @@ struct CoreBottomHUD: View {
                     SwiftUI.Text("\(m.player.hp)").font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.7))
                 }
                 HPBar(fraction: Double(m.player.hp) / Double(max(1, m.player.maxHP)), color: Color(red: 0.49, green: 0.89, blue: 0.66))
+                if let g = m.gaugeType {
+                    KiGauge(label: m.overload ? (L10n.isZH ? "超载" : "OVERLOAD") : (L10n.isZH ? g.nameZH : g.rawValue.uppercased()),
+                            value: m.overload ? 100 : m.gauge, color: Self.gaugeColor(g))
+                        .opacity(m.gauge >= 100 || m.overload ? 1 : 0.85)
+                }
                 HStack(spacing: 8) {
                     KiGauge(label: L10n.isZH ? "闪避" : "VANISH", value: m.vanish, color: Color(red: 0.5, green: 0.85, blue: 1))
                     KiGauge(label: L10n.isZH ? "气力" : "KI", value: m.ki, color: Color(Theme.accent))
@@ -242,6 +289,50 @@ struct CoreBottomHUD: View {
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 12)
+    }
+
+    private var rushPrompt: String {
+        switch m.rushMode {
+        case .pick: return L10n.isZH ? "升龙冲击！选择一张卡 · PICK A CARD" : "RISING RUSH! Pick a card"
+        case .guess: return L10n.isZH ? "对手升龙！猜中他的卡 · GUESS 1 OF 4" : "ENEMY RUSH! Guess 1 of 4"
+        case .wait, .none: return L10n.isZH ? "升龙冲击 · RISING RUSH" : "RISING RUSH"
+        }
+    }
+
+    static func gaugeColor(_ g: UniqueGaugeType) -> Color {
+        switch g {
+        case .attack: return Color(red: 1, green: 0.45, blue: 0.25)
+        case .autoEvade: return Color(red: 0.85, green: 0.9, blue: 1)
+        case .counter: return Color(red: 0.8, green: 0.6, blue: 1)
+        case .release: return Color(red: 0.4, green: 0.75, blue: 1)
+        }
+    }
+}
+
+/// Strike clash: a fast 0–999 bar; tap anywhere to lock.
+struct CoreClashOverlay: View {
+    @ObservedObject var m: CoreHUDModel
+    var body: some View {
+        if let v = m.clashBar {
+            VStack(spacing: 10) {
+                SwiftUI.Text(L10n.isZH ? "拼招！点击锁定 · CLASH! TAP" : "CLASH! TAP TO LOCK").font(.system(size: 20, weight: .black)).italic()
+                GeometryReader { g in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.15))
+                        Capsule().fill(LinearGradient(colors: [.orange, .yellow, .white], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: g.size.width * CGFloat(v) / 999)
+                    }
+                }
+                .frame(height: 14)
+                SwiftUI.Text("\(v)").font(.system(size: 34, weight: .heavy, design: .rounded))
+                    .foregroundStyle(m.clashLocked != nil ? Color(Theme.accent) : .white)
+            }
+            .padding(18)
+            .glassBox(20)
+            .padding(.horizontal, 40)
+            .foregroundStyle(.white)
+            .allowsHitTesting(false)
+        }
     }
 }
 
