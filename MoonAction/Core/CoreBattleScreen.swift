@@ -534,7 +534,7 @@ final class CoreBattleScreen: Screen {
             g.simdPosition = m.root.simdWorldPosition + back * Float(i) * 0.18
             g.simdOrientation = m.root.simdWorldOrientation
             g.opacity = CGFloat(0.5 - Double(i) * 0.14)
-            g.enumerateHierarchy { n, _ in n.particleSystems = nil }
+            g.enumerateHierarchy { n, _ in n.removeAllParticleSystems() }
             fx.addChildNode(g)
             g.runAction(.sequence([.wait(duration: Double(i) * 0.04), .fadeOut(duration: 0.3), .removeFromParentNode()]))
         }
